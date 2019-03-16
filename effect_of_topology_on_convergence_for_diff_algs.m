@@ -21,6 +21,6 @@ end
 % this function computes the gradient of the 
 function [GRAD] = GradConjF(X, i)
 
-
+ %hello
 
 end
