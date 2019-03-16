@@ -18,9 +18,10 @@ end
 
 
 
-% this function computes the gradient of the 
+% this function computes the gradient of the i-th function in the objective
+% that we are trying to optimize
 function [GRAD] = GradConjF(X, i)
 
- %hello
+ %
 
 end
