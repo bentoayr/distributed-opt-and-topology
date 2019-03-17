@@ -31,7 +31,7 @@ FBTime =1/Sqrt[RankedMin[SpecLlG,2]/RankedMax[SpecLlG,1]];
 AppendTo[list,{ADMMTime,GDTime,FBTime}];
 }];
 }];
-ListPlot[Transpose[list],Joined->True,Frame->True,PlotLegends->{"ADMM","GD","FB"}]
+Partition[list[[;;,;;]],99]//Transpose//Mean//Transpose//ListPlot[#,Joined->True,PlotRange->All,PlotMarkers->Automatic,,Frame->True,PlotLegends->{"ADMM","GD","FB"}]&
 
 
 (* ::Input:: *)
