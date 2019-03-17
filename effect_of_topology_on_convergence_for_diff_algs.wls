@@ -31,11 +31,13 @@ FBTime =1/Sqrt[RankedMin[SpecLlG,2]/RankedMax[SpecLlG,1]];
 AppendTo[list,{ADMMTime,GDTime,FBTime}];
 }];
 }];
-Partition[list[[;;,;;]],99]//Transpose//Mean//Transpose//ListPlot[#,Joined->True,PlotRange->All,PlotMarkers->Automatic,,Frame->True,PlotLegends->{"ADMM","GD","FB"}]&
+
+
+Partition[list[[;;,;;]],99]//Transpose//Mean//Transpose//ListPlot[#,Joined->True,PlotRange->All,PlotMarkers->Automatic,Frame->True,PlotLegends->{"ADMM","GD","FB"}]&
 
 
 (* ::Input:: *)
 (*Inverse[({*)
-(* {1+d, -1},*)
-(* {-1, 1+d}*)
-(*})]//FullSimplify//MatrixForm*)
+(* {1+d, -1,0},*)
+(* {-1, 1+d,0},{0,0,d}*)
+(*})]-(IdentityMatrix[3]/d)//FullSimplify*)
