@@ -1,4 +1,3 @@
-%% HELLO !
 %% testing different algorithms for distributed optimization
 
 % random graph
@@ -19,11 +18,12 @@ W = Lap_line_G;
 
 [E1, E2] = find(triu(Adj_G,1));
 numE = G.numedges;
-delta = 10;
+delta = 0.001;
 
 % Scaman et al. 2017, Algorithm 1 and Algorithm 2
-X = rand(n,numE);
-Y = rand(n,numE);
+Y = rand(n, numE)*real(sqrtm(full(W)));
+X = Y;
+
 Theta = rand(n,numE);
 
 alpha = delta;
@@ -39,13 +39,12 @@ c3 = 2/ ((1+gamma)*specW(end));
 K = floor(1 / sqrt(gamma));
 eta_2 = alpha*(1 + c1^(2*K))/((1 + c1^K)^2);
 mu_2 = ((1 + c1^K)*sqrt(kappa_l) - 1 + c1^K) / ((1 + c1^K)*sqrt(kappa_l) + 1 - c1^K);
-AccGossFlag = false;
-num_iter = 10;
-
-
+AccGossFlag = true;
+num_iter = 1000;
 
 evol = [];
 for t = 1:num_iter
+    
     for e = 1:numE
        Theta(:,e) = GradConjF( X(:,e) , e );
     end
@@ -58,11 +57,13 @@ for t = 1:num_iter
         Y = X - eta_2*AccGoss(X, W, K, c2, c3);
         X = (1 + mu_2)*Y - mu_2*Y_old;
     end
-    
-    evol = [evol, Theta(:,1) ];
+     
+    evol = [evol, Y(:,1) ];
     plot(evol');
     drawnow;
 end
+
+
 
 % this function computes the gradient of the i-th function in the objective
 % that we are trying to optimize
