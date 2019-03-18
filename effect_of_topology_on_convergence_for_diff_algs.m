@@ -1,3 +1,4 @@
+%% HELLO !
 %% testing different algorithms for distributed optimization
 
 % random graph
