@@ -39,7 +39,9 @@ c3 = 2/ ((1+gamma)*specW(end));
 K = floor(1 / sqrt(gamma));
 eta_2 = alpha*(1 + c1^(2*K))/((1 + c1^K)^2);
 mu_2 = ((1 + c1^K)*sqrt(kappa_l) - 1 + c1^K) / ((1 + c1^K)*sqrt(kappa_l) + 1 - c1^K);
-AccGossFlag = true;
+
+Alg_name = 1;
+
 num_iter = 1000;
 
 evol = [];
@@ -48,18 +50,27 @@ for t = 1:num_iter
     for e = 1:numE
        Theta(:,e) = GradConjF( X(:,e) , e );
     end
-    Y_old = Y;
     
-    if (AccGossFlag == false)
+    if (Alg_name == 1)
+        Y_old = Y;
         Y = X - eta*Theta*W;
         X = (1 + mu)*Y - mu*Y_old;
-    else
+        plot( [ 1 : t - 1 ] , evol');
+    if (Alg_name == 2)
+        Y_old = Y;
         Y = X - eta_2*AccGoss(X, W, K, c2, c3);
         X = (1 + mu_2)*Y - mu_2*Y_old;
+        plot([1:K:t*K-1],evol'); % each iteration corresponds to K gossip steps
+    end
+    if (Alg_name == 3)
+
+    
+    
+    
     end
      
-    evol = [evol, Y(:,1) ];
-    plot(evol');
+    evol = [evol, log(norm(Y(:,1))) ];
+        
     drawnow;
 end
 
@@ -76,6 +87,18 @@ function [GRAD] = GradConjF(X, i)
     GRAD(E2(i)) = GRAD(E2(i)) + (1/(2*d + d*d))*(   X(E1(i)) - X(E2(i))  );
 
 end
+
+function [GRAD] = GradF(X, i)
+    global delta E1 E2
+    d = delta;
+    GRAD = X*delta;
+    
+    GRAD(E1(i)) = GRAD(E1(i)) + (   X(E1(i)) - X(E2(i))  );
+    GRAD(E2(i)) = GRAD(E2(i)) + (  -X(E1(i)) + X(E2(i))  );
+
+end
+
+
 
 function [Y] = AccGoss(X, W, k, c2, c3)
 
