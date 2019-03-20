@@ -18,13 +18,16 @@ W = Lap_line_G;
 
 [E1, E2] = find(triu(Adj_G,1));
 numE = G.numedges;
-delta = 0.001;
+delta = 0.01;
 
 % Scaman et al. 2017, Algorithm 1 and Algorithm 2
 Y = rand(n, numE)*real(sqrtm(full(W)));
 X = Y;
 
-Theta = rand(n,numE);
+Theta = Y;%rand(n,numE);
+Theta_old = Theta;
+
+num_iter = 100;
 
 alpha = delta;
 beta  = 2;
@@ -40,39 +43,70 @@ K = floor(1 / sqrt(gamma));
 eta_2 = alpha*(1 + c1^(2*K))/((1 + c1^K)^2);
 mu_2 = ((1 + c1^K)*sqrt(kappa_l) - 1 + c1^K) / ((1 + c1^K)*sqrt(kappa_l) + 1 - c1^K);
 
-Alg_name = 1;
 
-num_iter = 1000;
+R = 2; 
+L_is = 2*ones(numE , 1);
+L_l = norm(L_is,2)/sqrt(numE);
+eta_3  = (numE*R/L_l)*((1 - c1^K)/(1 + c1^K));
+sigma = (1 + c1^(2*K))/((1 - c1^K)^2);
+Theta_tilde = rand(n,numE);
+sum_Theta = 0;
+
+
+M = num_iter;
+eps = 4*R*L_l/num_iter; % this is the target accuracy
+
+Alg_name = 3;
 
 evol = [];
-for t = 1:num_iter
     
-    for e = 1:numE
-       Theta(:,e) = GradConjF( X(:,e) , e );
-    end
-    
-    if (Alg_name == 1)
+if (Alg_name == 1)
+    for t = 1:num_iter
+        for e = 1:numE
+            Theta(:,e) = GradConjF( X(:,e) , e );
+        end
         Y_old = Y;
         Y = X - eta*Theta*W;
         X = (1 + mu)*Y - mu*Y_old;
-        plot( [ 1 : t - 1 ] , evol');
-    if (Alg_name == 2)
+        evol = [evol, log(norm(Y(:,1))) ];
+        plot( [ 1 : t  ] , evol');
+        drawnow;
+        %disp(t);
+    end
+end
+
+if (Alg_name == 2)
+    for t = 1:num_iter
+        for e = 1:numE
+            Theta(:,e) = GradConjF( X(:,e) , e );
+        end
         Y_old = Y;
         Y = X - eta_2*AccGoss(X, W, K, c2, c3);
         X = (1 + mu_2)*Y - mu_2*Y_old;
-        plot([1:K:t*K-1],evol'); % each iteration corresponds to K gossip steps
+        evol = [evol, log(norm(Y(:,1))) ];
+        plot([1:K:t*K],evol'); % each iteration corresponds to K gossip steps
+        drawnow;
     end
-    if (Alg_name == 3)
-
-    
-    
-    
-    end
-     
-    evol = [evol, log(norm(Y(:,1))) ];
-        
-    drawnow;
 end
+
+if (Alg_name == 3)
+    for t = 1:num_iter
+        Y = Y - sigma*AccGoss(2*Theta - Theta_old, W, K,c2,c3);
+        Theta_tilde(:,:) = Theta;
+        for m = 1:M
+            for e = 1:numE
+                Theta_tilde(:,e) = (m/(m+1))*Theta_tilde(:,e) - (2/(2+m))*((eta_3/numE)*GradF( Theta_tilde(:,e)  , e) - eta_3*Y(:,e) - Theta(:,e)  );
+            end
+        end
+        Theta_old = Theta;
+        Theta = Theta_tilde;
+        sum_Theta = sum_Theta + sum(Theta,2)/(num_iter*numE);
+        evol = [evol, log(norm(sum_Theta)) ];
+        plot([1:K:t*K],evol'); % each iteration corresponds to K gossip steps
+        drawnow;
+    end
+end
+
 
 
 
