@@ -1,10 +1,10 @@
 %% testing different algorithms for distributed optimization
 
 % random graph
-global E1 E2 delta
+global E1 E2 delta numE
 
-n = 30;
-G = rand(n) > 0.5;
+dim = 30;
+G = rand(dim) > 0.5;
 G = graph(triu(G,1) + triu(G,1)');
 
 Adj_G = adjacency(G);
@@ -21,13 +21,13 @@ numE = G.numedges;
 delta = 0.01;
 
 % Scaman et al. 2017, Algorithm 1 and Algorithm 2
-Y = rand(n, numE)*real(sqrtm(full(W)));
+Y = 0*rand(dim, numE)*real(sqrtm(full(W)));
 X = Y;
 
-Theta = Y;%rand(n,numE);
+Theta = repmat(rand(dim,1),1,numE);
 Theta_old = Theta;
 
-num_iter = 100;
+num_iter = 500;
 
 alpha = delta;
 beta  = 2;
@@ -49,12 +49,20 @@ L_is = 2*ones(numE , 1);
 L_l = norm(L_is,2)/sqrt(numE);
 eta_3  = (numE*R/L_l)*((1 - c1^K)/(1 + c1^K));
 sigma = (1 + c1^(2*K))/((1 - c1^K)^2);
-Theta_tilde = rand(n,numE);
+Theta_tilde = rand(dim,numE);
 sum_Theta = 0;
 
 
 M = num_iter;
 eps = 4*R*L_l/num_iter; % this is the target accuracy
+
+
+% tmp = randn(dim,1);
+% [X_out] = ProxF(tmp, 2, 0.4);
+% [X_out_2] = AppProxF(tmp, 2, 0.4,600);
+% norm(X_out-X_out_2)
+% return;
+
 
 Alg_name = 3;
 
@@ -93,10 +101,13 @@ if (Alg_name == 3)
     for t = 1:num_iter
         Y = Y - sigma*AccGoss(2*Theta - Theta_old, W, K,c2,c3);
         Theta_tilde(:,:) = Theta;
-        for m = 1:M
-            for e = 1:numE
-                Theta_tilde(:,e) = (m/(m+1))*Theta_tilde(:,e) - (2/(2+m))*((eta_3/numE)*GradF( Theta_tilde(:,e)  , e) - eta_3*Y(:,e) - Theta(:,e)  );
-            end
+        for e = 1:numE
+            
+            %for m = 1:M
+            %    Theta_tilde(:,e) = (m/(m+2))*Theta_tilde(:,e) - (2/(2+m))*((eta_3/numE)*GradF( Theta_tilde(:,e)  , e) - eta_3*Y(:,e) - Theta(:,e)  );
+            %end
+            Theta_tilde(:,e) = ProxF( eta_3*Y(:,e) + Theta(:,e) , e, 1/eta_3);
+            
         end
         Theta_old = Theta;
         Theta = Theta_tilde;
@@ -115,7 +126,7 @@ end
 function [GRAD] = GradConjF(X, i)
     global delta E1 E2
     d = delta;
-    GRAD = X/delta;
+    GRAD = (X)/delta;
     
     GRAD(E1(i)) = GRAD(E1(i)) + (1/(2*d + d*d))*(  -X(E1(i)) + X(E2(i))  );
     GRAD(E2(i)) = GRAD(E2(i)) + (1/(2*d + d*d))*(   X(E1(i)) - X(E2(i))  );
@@ -125,11 +136,36 @@ end
 function [GRAD] = GradF(X, i)
     global delta E1 E2
     d = delta;
-    GRAD = X*delta;
+    GRAD = (X)*delta;
     
     GRAD(E1(i)) = GRAD(E1(i)) + (   X(E1(i)) - X(E2(i))  );
     GRAD(E2(i)) = GRAD(E2(i)) + (  -X(E1(i)) + X(E2(i))  );
 
+end
+
+
+function [X_out] = ProxF(X, i, rho)
+    global E1 E2 numE delta
+    
+    d = (rho*numE+delta);
+    
+    X_out = (X)/d;
+    
+    X_out(E1(i)) = X_out(E1(i)) + (1/(2*d + d*d))*(  -X(E1(i)) + X(E2(i))  );
+    X_out(E2(i)) = X_out(E2(i)) + (1/(2*d + d*d))*(   X(E1(i)) - X(E2(i))  );
+
+    X_out = X_out*numE*rho;
+    
+end
+
+function [X_out] = AppProxF(X, i, rho, M)
+    global numE
+
+    X_out = X;
+    for m = 1:M
+        X_out = X_out - (2/(m+2))*( (1/numE)*GradF( X_out , i)  + rho*(X_out - X)     );
+    end
+    
 end
 
 
