@@ -27,7 +27,7 @@ X = Y;
 Theta = repmat(rand(dim,1),1,numE);
 Theta_old = Theta;
 
-num_iter = 1000;
+num_iter = 10000;
 
 alpha = delta;
 beta  = 2 + delta;
@@ -44,11 +44,11 @@ eta_2 = alpha*(1 + c1^(2*K))/((1 + c1^K)^2);
 mu_2 = ((1 + c1^K)*sqrt(kappa_l) - 1 + c1^K) / ((1 + c1^K)*sqrt(kappa_l) + 1 - c1^K);
 
 
-R = 2; 
+R = 1; 
 L_is = (2+delta)*ones(numE , 1);
 L_l = norm(L_is,2)/sqrt(numE);
-eta_3  = ((1 - c1^K)/(1 + c1^K));%*(numE*R/L_l);
-sigma = (1 + c1^(2*K))/((1 - c1^K)^2);
+eta_3  = ((1 - c1^K)/(1 + c1^K))*(numE*R/L_l);
+sigma = (1/eta_3)*(1 + c1^(2*K))/((1 - c1^K)^2);
 sum_Theta = 0;
 
 
@@ -99,12 +99,12 @@ if (Alg_name == 2)
 end
 
 
-sigma = 1/(eta_3*norm(full(W_Acc),2));
-%eta_3 = 1/(sigma*norm(full(W_Acc),2));
+%sigma = 1/(eta_3*norm(full(W_Acc),2));
+eta_3 = 1/(sigma*norm(full(W_Acc),2));
 if (Alg_name == 3)
     
     if (norm(full(W_Acc),2)*sigma*eta_3 > 1)
-        disp(['Convergene condition not met because ', num2str(norm(full(W),2)*sigma*eta_3), ' is bigger than 1']);
+        disp(['Convergene condition not met because ', num2str(norm(full(W_Acc),2)*sigma*eta_3), ' is bigger than 1']);
         %return;
     end
        
