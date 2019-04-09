@@ -47,10 +47,12 @@ mu_2 = ((1 + c1^K)*sqrt(kappa_l) - 1 + c1^K) / ((1 + c1^K)*sqrt(kappa_l) + 1 - c
 R = 1; 
 L_is = (2+delta)*ones(numE , 1);
 L_l = norm(L_is,2)/sqrt(numE);
-eta_3  = ((1 - c1^K)/(1 + c1^K))*(numE*R/L_l);
-sigma = (1/eta_3)*(1 + c1^(2*K))/((1 - c1^K)^2);
-sum_Theta = 0;
 
+fixing_factor = 3;
+
+eta_3  = ((1 - c1^K)/(1 + c1^K))*(numE*R/L_l);
+sigma = (1/fixing_factor)*(1/eta_3)*(1 + c1^(2*K))/((1 - c1^K)^2);
+sum_Theta = 0;
 
 M = num_iter;
 eps = 4*R*L_l/num_iter; % this is the target accuracy
@@ -98,9 +100,6 @@ if (Alg_name == 2)
     end
 end
 
-
-%sigma = 1/(eta_3*norm(full(W_Acc),2));
-eta_3 = 1/(sigma*norm(full(W_Acc),2));
 if (Alg_name == 3)
     
     if (norm(full(W_Acc),2)*sigma*eta_3 > 1)
