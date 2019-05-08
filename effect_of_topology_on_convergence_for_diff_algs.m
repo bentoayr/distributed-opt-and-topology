@@ -17,6 +17,9 @@ Lap_line_G = laplacian(line_G);
 W = Lap_line_G;
 
 [E1, E2] = find(triu(Adj_G,1));
+E1E2 = sort([E1, E2] , 2);
+E1 = E1E2(:,1);E2 = E1E2(:,2); %makes sure E1 always has the smaller indices and E2 the larger indices
+
 numE = G.numedges;
 delta = 0.01;
 
@@ -68,7 +71,7 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 
 
 
-Alg_name = 4;
+Alg_name = 5;
 
 evol = [];
     
@@ -136,7 +139,7 @@ if (Alg_name == 4)
     X = randn(dim,numE,1);
     U = randn(dim,numE,numE);
     U_old = U;
-    rho = 0.001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    rho = 0.0001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     
     for t = 1:num_iter
         X_old = X;
@@ -149,8 +152,41 @@ if (Alg_name == 4)
         
         for e = 1:numE
             Neig_e = find(Adj_line_G(e,:));
-            %U(:,e, Neig_e) = permute(    U_old(:,Neig_e,e) - X_old(:, Neig_e,1 ) + repmat(X(:,e,1),1,length(Neig_e),1)   , [1, 3, 2])  ;
             U(:,e, Neig_e) = 0.5*U_old(:,e, Neig_e) +  0.5*permute(  X_old(:, Neig_e,1 )   -  repmat(X_old(:,e,1),1,length(Neig_e),1)   -   U_old(:,Neig_e,e)  , [1, 3, 2]);
+        end
+        
+        evol = [evol, log(norm( X(:,1,1)    - 1)) ];
+        plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
+        drawnow;
+    end
+    
+end
+
+
+if (Alg_name == 5)
+   
+    X = randn(dim,numE,1);
+    U = randn(dim,numE,2); 
+    U_old = U;
+    rho = 1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    
+    for t = 1:num_iter
+        X_old = X;
+        U_old = U;
+
+        for e = 1:numE 
+            e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
+            Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
+            Nm = mean(X_old(:,Neig_e1,1) + U_old(:,Neig_e1,1),2) + mean(X_old(:,Neig_e2,1) + U_old(:,Neig_e2,2),2) - 0.5*(U_old(:,e,1)+U_old(:,e,2)) - X_old(:,e,1);
+            X(:,e,1) =   ProxF( Nm   ,   e   , 2*rho );     
+        end
+        
+        for e = 1:numE
+            e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
+            Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
+            %U(:,e, Neig_e) = permute(    U_old(:,Neig_e,e) - X_old(:, Neig_e,1 ) + repmat(X(:,e,1),1,length(Neig_e),1)   , [1, 3, 2])  ;
+            U(:, Neig_e1,1) = U_old(:,Neig_e1,1) + X_old(:,e,1) -  mean(X_old(:,Neig_e1,1) + U_old(:,Neig_e1,1));
+            U(:, Neig_e2,2) = U_old(:,Neig_e2,2) + X_old(:,e,1) -  mean(X_old(:,Neig_e2,1) + U_old(:,Neig_e2,2));
         end
         
         evol = [evol, log(norm( X(:,1,1)    - 1)) ];
@@ -174,6 +210,8 @@ function [GRAD] = GradConjF(X, i)
     GRAD(E2(i)) = GRAD(E2(i)) + (1/(2*d + d*d))*(   X(E1(i)) - X(E2(i))  );
 end
 
+% this is the gradient for the function
+% (0.5 * (x_i - x_j)^2 + 0.5*delta*(X)^2 )
 function [GRAD] = GradF(X, i)
     global delta E1 E2
     d = delta;
@@ -185,6 +223,8 @@ function [GRAD] = GradF(X, i)
     GRAD = GRAD - d*ones(length(X),1);
 end
 
+% this is the proximal operator 
+% Prox(N) = argmin_X    (1/numE) (0.5 * (x_i - x_j)^2 + 0.5*delta*(X)^2 )+ 0.5*rho* (X - N)^2
 function [X_out] = ProxF(X, i, rho)
     global E1 E2 numE delta
     
@@ -198,6 +238,10 @@ function [X_out] = ProxF(X, i, rho)
     X_out(E2(i)) = X_out(E2(i)) + (1/(2*d + d*d))*(   X(E1(i)) - X(E2(i))  );
 end
 
+
+% this is an approximation for the proximal operator 
+% Prox(N) = argmin_X    (1/numE) (0.5 * (x_i - x_j)^2 + 0.5*delta*(X)^2 )+ 0.5*rho* (X - N)^2
+% using gradient descent
 function [X_out] = AppProxF(X, i, rho, M, alpha)
     global numE
 
