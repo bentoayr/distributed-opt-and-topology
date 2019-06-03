@@ -168,28 +168,32 @@ if (Alg_name == 5)
     X = randn(dim,numE,1);
     U = randn(dim,numE,2); 
     U_old = U;
-    rho = 1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    rho = 0.001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     
     for t = 1:num_iter
         X_old = X;
-        U_old = U;
 
         for e = 1:numE 
             e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
             Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
-            Nm = mean(X_old(:,Neig_e1,1) + U_old(:,Neig_e1,1),2) + mean(X_old(:,Neig_e2,1) + U_old(:,Neig_e2,2),2) - 0.5*(U_old(:,e,1)+U_old(:,e,2)) - X_old(:,e,1);
+            Nm = mean(X_old(:,Neig_e1,1) + U_old(:,Neig_e1,1),2) + mean(X_old(:,Neig_e2,1) + U_old(:,Neig_e2,2),2) - 0.5*(U_old(:,e,1) + U_old(:,e,2)) - X_old(:,e,1);
             X(:,e,1) =   ProxF( Nm   ,   e   , 2*rho );     
         end
+        
+        U_old = U;
         
         for e = 1:numE
             e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
             Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
             %U(:,e, Neig_e) = permute(    U_old(:,Neig_e,e) - X_old(:, Neig_e,1 ) + repmat(X(:,e,1),1,length(Neig_e),1)   , [1, 3, 2])  ;
-            U(:, Neig_e1,1) = U_old(:,Neig_e1,1) + X_old(:,e,1) -  mean(X_old(:,Neig_e1,1) + U_old(:,Neig_e1,1));
-            U(:, Neig_e2,2) = U_old(:,Neig_e2,2) + X_old(:,e,1) -  mean(X_old(:,Neig_e2,1) + U_old(:,Neig_e2,2));
+            U(:, Neig_e1,1) = U_old(:,Neig_e1,1) + (X(:,e,1) -  mean(X(:,Neig_e1,1) + U_old(:,Neig_e1,1),2));
+            U(:, Neig_e2,2) = U_old(:,Neig_e2,2) + (X(:,e,1) -  mean( X(:,Neig_e2,1) + U_old(:,Neig_e2,2),2));
         end
         
-        evol = [evol, log(norm( X(:,1,1)    - 1)) ];
+        err = sum(sum(sum(abs(U - U_old))));
+        err = log(norm( X(:,1,1)    - 1));
+        
+        evol = [evol, err ];
         plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
         %imagesc(X(:,:,1));
         drawnow;
