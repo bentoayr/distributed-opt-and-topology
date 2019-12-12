@@ -85,8 +85,6 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 % return;
 
 
-
-
 Alg_name = 6;
 
 evol = [];
