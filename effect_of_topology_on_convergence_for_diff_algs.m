@@ -2,7 +2,7 @@
 %
 
 % random graph
-global E1 E2 delta numE
+global E1 E2 delta numE target
 
 dim = 30;
 G = rand(dim) > 0.5;
@@ -32,7 +32,10 @@ E2 = G.Edges.EndNodes(:,2);
 
 numE = G.numedges;
 numEline = line_G.numedges;
+
+
 delta = 0.001;
+target = -0.342; 
 
 % Scaman et al. 2017, Algorithm 1 and Algorithm 2
 Y = rand(dim, numE)*real(sqrtm(full(W)));
@@ -84,7 +87,7 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 
 
 
-Alg_name = 5;
+Alg_name = 6;
 
 evol = [];
     
@@ -96,7 +99,7 @@ if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convexdis
         Y_old = Y;
         Y = X - eta_1*Theta*W;
         X = (1 + mu_1)*Y - mu_1*Y_old;
-        evol = [evol, log(norm( Theta(:,:) - 1 ,1)) ];
+        evol = [evol, log(norm( Theta(:,:) - target ,1)) ];
         plot( [ 1 : t  ] , evol');
         drawnow;
     end
@@ -110,7 +113,7 @@ if (Alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convexdis
         Y_old = Y;
         Y = X - eta_2*AccGoss(X, W, K, c2, c3);
         X = (1 + mu_2)*Y - mu_2*Y_old;
-        evol = [evol, log(norm( Theta(:,:) - 1 ,1)) ];
+        evol = [evol, log(norm( Theta(:,:) - target ,1)) ];
         plot([1:K:t*K],evol'); % each iteration corresponds to K gossip steps
         drawnow;
     end
@@ -140,7 +143,7 @@ if (Alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optim
         Theta = Theta_tilde;
         
         sum_Theta = sum_Theta + sum(Theta,2)/numE; % the paper asks to compute the average in space and time
-        evol = [evol, log(norm(sum_Theta/t - 1)) ];
+        evol = [evol, log(norm(sum_Theta/t - target)) ];
         plot([1:K:t*K],evol'); % each iteration corresponds to K gossip steps
         drawnow;
     end
@@ -173,7 +176,7 @@ if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
         
         XAve = XAve + X; % the paper asks to compute the average in space
         
-        evol = [evol, log(norm( X    - 1)) ];
+        evol = [evol, log(norm( X    - target)) ];
         plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
         drawnow;
     end
@@ -205,7 +208,7 @@ if (Alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = 
             U(:,e, Neig_e) = U(:,e, Neig_e) + alp*(0.5*(    -U_old(:,e, Neig_e)  + permute( -X(:,Neig_e,1)    -U_old(:,Neig_e,e) + repmat(X(:,e,1),1,length(Neig_e),1) , [1, 3, 2])    ));
         end
                 
-        evol = [evol, log(norm( X    - 1)) ];
+        evol = [evol, log(norm( X    - target)) ];
         plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
         drawnow;
     end
@@ -216,36 +219,36 @@ end
 
 
 if (Alg_name == 6)
-   
-    X = randn(dim,numE,1);
-    U = randn(dim,numEline,2); 
+    
+    X = randn(2,numE);
+    Z = randn(dim,1);
+    U = randn(2,numE); 
+    
     U_old = U;
-    rho = 0.001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    rho = 0.0001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    alp = 0.1;
     
     for t = 1:num_iter
-        X_old = X;
 
         for e = 1:numE
-            Neig_e = find(Adj_line_G(e,:));
-
-            e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
-            Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
-            Nm = mean(X_old(:,Neig_e1,1) + U_old(:,Neig_e1,1),2) + mean(X_old(:,Neig_e2,1) + U_old(:,Neig_e2,2),2) - 0.5*(U_old(:,e,1) + U_old(:,e,2)) - X_old(:,e,1);
-            X(:,e,1) =   ProxF( Nm   ,   e   , 2*rho );     
+            i = E1(e); j = E2(e);
+            [X(:,e)] =  ProxFPair( [Z(i) - U(1,e);Z(j) - U(2,e)]   ,   e   , rho*numE );                
         end
         
-        U_old = U;
+        for i = 1:dim
+            e1Neigh = find(E1 == i);
+            e2Neigh = find(E2 == i);            
+            Z(i) = (sum(X(1,e1Neigh) + U(1,e1Neigh),2) + sum(X(2,e2Neigh) + U(2,e2Neigh),2)) / (length(e1Neigh) + length(e2Neigh));
+        end
+       
         
         for e = 1:numE
-            e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
-            Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
-            %U(:,e, Neig_e) = permute(    U_old(:,Neig_e,e) - X_old(:, Neig_e,1 ) + repmat(X(:,e,1),1,length(Neig_e),1)   , [1, 3, 2])  ;
-            U(:, Neig_e1,1) = U_old(:,Neig_e1,1) + (X(:,e,1) -  mean(X(:,Neig_e1,1) + U_old(:,Neig_e1,1),2));
-            U(:, Neig_e2,2) = U_old(:,Neig_e2,2) + (X(:,e,1) -  mean( X(:,Neig_e2,1) + U_old(:,Neig_e2,2),2));
+            i = E1(e); j = E2(e);
+            U(1, e) = U(1, e) + alp*( X(1,e)  - Z(i)  ); 
+            U(2, e) = U(2, e) + alp*( X(2,e)  - Z(j)  ); 
         end
         
-        err = sum(sum(sum(abs(U - U_old))));
-        err = log(norm( X(:,1,1)    - 1));
+        err = log(norm( Z    - target));
         
         evol = [evol, err ];
         plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
@@ -295,12 +298,11 @@ if (Alg_name == 7)
 end
 
 
-% this function computes the gradient of the i-th function in the objective
-% that we are trying to optimize
+% this function computes the gradient of conjugate of the i-th function in the objective that we are trying to optimize
 function [GRAD] = GradConjF(X, i)
-    global delta E1 E2
+    global delta E1 E2 target
     d = delta;
-    X = X + d*ones(length(X),1);
+    X = X + target*d*ones(length(X),1);
     GRAD = (X)/delta;
     
     GRAD(E1(i)) = GRAD(E1(i)) + (1/(2*d + d*d))*(  -X(E1(i)) + X(E2(i))  );
@@ -308,24 +310,24 @@ function [GRAD] = GradConjF(X, i)
 end
 
 % this is the gradient for the function
-% (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - 1)^2 )
+% (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 )
 function [GRAD] = GradF(X, i)
-    global delta E1 E2
+    global delta E1 E2 target
     d = delta;
     GRAD = (X)*delta;
     
     GRAD(E1(i)) = GRAD(E1(i)) + (   X(E1(i)) - X(E2(i))  );
     GRAD(E2(i)) = GRAD(E2(i)) + (  -X(E1(i)) + X(E2(i))  );
 
-    GRAD = GRAD - d*ones(length(X),1);
+    GRAD = GRAD - d*target*ones(length(X),1);
 end
 
 % this is the proximal operator 
-% Prox(N) = argmin_X    (1/numE) (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - 1)^2 )+ 0.5*rho* (X - N)^2
+% Prox(N) = argmin_X    (1/numE) (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 )+ 0.5*rho* (X - N)^2
 function [X_out] = ProxF(N, e, rho)
-    global E1 E2 numE delta
+    global E1 E2 numE delta target
     
-    N = N*numE*rho + delta;
+    N = N*numE*rho + delta*target;
     
     d = ( rho*numE + delta );
     
@@ -337,7 +339,7 @@ end
 
 
 % this is an approximation for the proximal operator 
-% Prox(N) = argmin_X    (1/numE) (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - 1)^2 )+ 0.5*rho* (X - N)^2
+% Prox(N) = argmin_X    (1/numE) (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 )+ 0.5*rho* (X - N)^2
 % using gradient descent
 function [X_out] = AppProxF(X, i, rho, M, alpha)
     global numE
@@ -349,20 +351,25 @@ function [X_out] = AppProxF(X, i, rho, M, alpha)
     
 end
 
+% this is the proximal operator that minimizes over x_i and x_j the
+% function (0.5 * (x_i - x_j)^2 + 0.5*delta*numE*inv_deg_i(x_i - target)^2 + 0.5*delta*numE**inv_deg_j(x_j - target)^2 )+ 0.5*rho* (x_i - N_i)^2  + 0.5*rho* (x_j - N_j)^2
 function [X_out] = ProxFPair(N, e, rho)
-    global E1 E2 numE delta
+    global E1 E2 numE delta target
     
     i = E1(e); j = E2(e);
+    degi = length(find( E1 == i | E2 == i));
+    degj = length(find( E1 == j | E2 == j));
+    inv_deg_i = 1/degi;
+    inv_deg_j = 1/degj;
     
+    a = 1 + delta*numE*inv_deg_i + rho;
+    b = 1 + delta*numE*inv_deg_j + rho;
+    c = rho*N(1) + delta*numE*inv_deg_i*target;
+    d = rho*N(2) + delta*numE*inv_deg_j*target;
     
-    N = N*numE*rho + delta;
+    X_out(1) = (1/(a*b - 1))*( b*c + d );
+    X_out(2) = (1/(a*b - 1))*( c + d*a );
     
-    d = ( rho*numE + delta );
-    
-    X_out = (N)/d;
-    
-    X_out(E1(e)) = X_out(E1(e)) + (1/(2*d + d*d))*(  -N(E1(e)) + N(E2(e))  );
-    X_out(E2(e)) = X_out(E2(e)) + (1/(2*d + d*d))*(   N(E1(e)) - N(E2(e))  );
 end
 
 
