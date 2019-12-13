@@ -89,7 +89,7 @@ Alg_name = 6;
 
 evol = [];
     
-if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convexdistributed optimization in networks"
+if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
     for t = 1:num_iter
         for e = 1:numE 
             Theta(:,e) = GradConjF( X(:,e) , e );
@@ -103,7 +103,7 @@ if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convexdis
     end
 end
 
-if (Alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convexdistributed optimization in networks"
+if (Alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
     for t = 1:num_iter
         for e = 1:numE
             Theta(:,e) = GradConjF( X(:,e) , e );
