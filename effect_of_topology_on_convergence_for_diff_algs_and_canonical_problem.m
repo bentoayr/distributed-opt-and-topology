@@ -85,10 +85,20 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 % return;
 
 
-Alg_name = 6;
+Alg_name = 0;
 
 evol = [];
-    
+
+if (Alg_name == 0) %Gradient descent
+    alf = 0.1;
+    for t = 1:num_iter
+        X = X - alf*(Lap_G*X + delta*(X-target));
+        evol = [evol, log(norm( X - target ,1)) ];
+        plot( [ 1 : t  ] , evol');
+        drawnow;
+    end
+end
+
 if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
     for t = 1:num_iter
         for e = 1:numE 
@@ -212,8 +222,6 @@ if (Alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = 
     end
     
 end
-
-
 
 
 if (Alg_name == 6)
