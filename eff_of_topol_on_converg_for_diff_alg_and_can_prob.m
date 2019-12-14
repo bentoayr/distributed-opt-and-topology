@@ -88,7 +88,7 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 % return;
 
 
-Alg_name = 5;
+Alg_name = 4;
 
 evol = [];
 
@@ -183,7 +183,7 @@ if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
         
         for e = 1:numE
             Neig_e = find(Adj_line_G(e,:));
-            U(:,e, Neig_e) = U(:,e, Neig_e) + (- U(:,e, Neig_e) + permute( -U_old(:,Neig_e,e) - repmat(X(:,e,1),1,length(Neig_e),1) +  X_old(:, Neig_e,1 ), [1, 3, 2]));
+            U(:,e, Neig_e) = U(:,e, Neig_e) + alp*(- U(:,e, Neig_e) + permute( -U_old(:,Neig_e,e) - repmat(X(:,e,1),1,length(Neig_e),1) +  X_old(:, Neig_e,1 ), [1, 3, 2]));
         end
         
         XAve = XAve + X; % the paper asks to compute the average in space

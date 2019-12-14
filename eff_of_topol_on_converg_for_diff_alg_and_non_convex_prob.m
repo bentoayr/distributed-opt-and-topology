@@ -3,8 +3,7 @@
 numV = 30;
 G = rand(numV) > 0.5;
 G = graph(triu(G,1) + triu(G,1)'); % undirected random E-R graph. This is not a matrix. It is a graph object.
-E1 = G.Edges.EndNodes(:,1);
-E2 = G.Edges.EndNodes(:,2);
+
 
 Adj_G = adjacency(G);
 Lap_G = laplacian(G);
@@ -13,6 +12,11 @@ Adj_line_G = Inc_G'*Inc_G - 2*eye(G.numedges); % the relation between the line g
 
 line_G = graph(Adj_line_G);
 Lap_line_G = laplacian(line_G);
+
+E1 = G.Edges.EndNodes(:,1);
+E2 = G.Edges.EndNodes(:,2);
+E1line = line_G.Edges.EndNodes(:,1);
+E2line = line_G.Edges.EndNodes(:,2);
 
 % we make a simple choice for the Gossip matrix, it being equal to the Laplacian of our line graph
 W = Lap_line_G;
@@ -33,7 +37,7 @@ q = 1;
 
 evol = [];
 
-Alg_name = 5;
+Alg_name = 4;
 
 if (Alg_name == 0)
     
@@ -51,20 +55,57 @@ if (Alg_name == 0)
         plot([1:1:t*1],evol'); 
         %scatter(X(1,:)',X(2,:)'); % we can vizualize the position of the points
         drawnow;
+        
     end
 
 end
     
 
-if (Alg_name == 5)
+
+if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
+   
+    X = randn(dim,numV,numE,1);
+    XAve = zeros(dim,numV,numE,1);
+    U = randn(dim,numV,numE,numE);
+    U_old = U;
+    rho = 0.01; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    alp = 0.1;
+    
+    for t = 1:num_iter
+        X_old = X;
+        U_old = U;
+
+        for e = 1:numE
+            Neig_e = find(Adj_line_G(e,:));
+            X(:,:,e,1) =   ProxF( p,q, mean(  X_old(:,:,Neig_e,1) - U_old(:,:,Neig_e,e) , 3)     , rho*numE*length(Neig_e) , D, e ,E1, E2  );     
+        end
+        
+        for e = 1:numE
+            Neig_e = find(Adj_line_G(e,:));
+            U(:,:,e, Neig_e) = U(:,:,e, Neig_e) + alp*(- U(:,:,e, Neig_e) + permute( -U_old(:,:,Neig_e,e) - repmat(X(:,:,e,1),1,1,length(Neig_e),1) +  X_old(:, :,Neig_e,1 ), [1, 2, 4, 3]));
+        end
+        
+        XAve = XAve + X; % the paper asks to compute the average in space
+        
+        err =  log(compute_objective(X(:,:,1,1),D,p,q,E1,E2));
+        
+        evol = [evol, err ];
+        plot([1:1:t*1],evol'); 
+        %scatter(X(1,:,1,1)',X(2,:,1,1)'); % we can vizualize the position of the points
+
+        drawnow;
+    end
+    
+end
+
+if (Alg_name == 5) 
 
     X = randn(dim,numV,numE,1);
     U = randn(dim,numV,numE,numE);
     U_old = U;
     
-    rho = 0.00001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.01;
-    
+    rho = 1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    alp = 0.1;
     for t = 1:num_iter
         
         X_old = X;
@@ -77,22 +118,62 @@ if (Alg_name == 5)
         
         for e = 1:numE
             Neig_e = find(Adj_line_G(e,:));
-            U(:,:,e, Neig_e) = U(:,:,e, Neig_e) + alp*(0.5*(    -U_old(:,:,e, Neig_e)  + permute( -X(:,:,Neig_e,1)    -U_old(:,:,Neig_e,e) + repmat(X(:,:,e,1),1,1,length(Neig_e),1) , [1,2, 4, 3])    ));
+            U(:,:,e, Neig_e) = U_old(:,:,e, Neig_e) + alp*(0.5*(    -U_old(:,:,e, Neig_e)  + permute( -X(:,:,Neig_e,1)    -U_old(:,:,Neig_e,e) + repmat(X(:,:,e,1),1,1,length(Neig_e),1) , [1,2, 4, 3])    ));
         end
                 
         
         err =  log(compute_objective(X(:,:,1,1),D,p,q,E1,E2));
         
+        %evol = [evol, err ];
+        %plot([1:1:t*1],evol'); 
+        scatter(X(1,:,1,1)',X(2,:,1,1)'); % we can vizualize the position of the points
+
+        drawnow;
+    end
+end
+
+
+if (Alg_name == 6) 
+
+    X = randn(dim,numV,numE);
+    U = randn(dim,numV,numEline);
+    U_old = U;
+    
+    rho = 1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    alp = 1;
+    
+    for t = 1:num_iter
+        
+        X_old = X;
+        U_old = U;
+        
+        for e = 1:numE
+            Neig_e = find(Adj_line_G(e,:));
+            Neig_e_ix = find(E1line == e | E2line == e);
+            S = zeros(1,1,length(Neig_e_ix));
+            S(1,1,:) = sign(Neig_e - e);
+            X(:,:,e) =  ProxF( p,q, mean(  X_old(:,:,Neig_e) - U(:,:,Neig_e_ix).*repmat(S,dim,numV,1) , 3) ,  rho*numE*length(Neig_e)   ,  D, e ,E1, E2  );     
+
+        end
+        
+        for linee = 1:numEline
+            e1 = E1line(linee);
+            e2 = E2line(linee);
+            
+            U(:,:,linee) = U_old(:,:,linee) + alp*( X(:,:,e1) - X(:,:,e2) );
+        end
+        
+        err =  log(compute_objective(X(:,:,1),D,p,q,E1,E2));
         evol = [evol, err ];
-        plot([1:1:t*1],evol'); 
-        %scatter(X(1,:,1,1)',X(2,:,1,1)'); % we can vizualize the position of the points
+        plot([1:1:t*1],evol');
+        
+        %scatter(X(1,:,1)',X(2,:,1)'); % we can vizualize the position of the points
         drawnow;
     end
 
-
 end
 
-if (Alg_name == 6)
+if (Alg_name == 7)
 
     X = randn(dim,2,numE);
     Z = randn(dim,numV);
@@ -124,9 +205,9 @@ if (Alg_name == 6)
         
         err =  log(compute_objective(Z,D,p,q,E1,E2));
         
-        evol = [evol, err ];
-        plot([1:1:t*1],evol'); 
-        %scatter(Z(1,:)',Z(2,:)'); % we can vizualize the position of the points
+        %evol = [evol, err ];
+        %plot([1:1:t*1],evol'); 
+        scatter(Z(1,:)',Z(2,:)'); % we can vizualize the position of the points
         drawnow;
     end
     
@@ -194,13 +275,13 @@ end
 % this is the proximal operator min_xi xj  | |xi - xj|^p  - d^p |^q + 0.5*rho*(X - N)^2
 function [x_opt] = ProxF(p,q,N,rho,D,e,E1,E2)
 
-    x_opt = N; % most components will not change
+    x_opt = N; % most components will not change. But the components corresponding to the edge being processed change
     i = E1(e); j = E2(e);
     d = D(i,j);
     N1 = N(:,i);
     N2 = N(:,j);
     [x1_opt,x2_opt] = ProxFPair(p,q,N1,N2,rho,d);
-    x_opt(:,1) = x1_opt; x_opt(:,2) = x2_opt;
+    x_opt(:,i) = x1_opt; x_opt(:,j) = x2_opt;
    
 
 end
