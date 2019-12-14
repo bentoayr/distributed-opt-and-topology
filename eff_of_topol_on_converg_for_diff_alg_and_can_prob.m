@@ -24,6 +24,9 @@ W = Lap_line_G;
 
 E1 = G.Edges.EndNodes(:,1);
 E2 = G.Edges.EndNodes(:,2);
+
+E1line = line_G.Edges.EndNodes(:,1);
+E2line = line_G.Edges.EndNodes(:,2);
 %the code above makes sure that E1 always has the smaller indices and that E2 the larger indices
 
 
@@ -85,14 +88,16 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 % return;
 
 
-Alg_name = 0;
+Alg_name = 5;
 
 evol = [];
 
 if (Alg_name == 0) %Gradient descent
+    X = rand(dim,1);
     alf = 0.1;
     for t = 1:num_iter
-        X = X - alf*(Lap_G*X + delta*(X-target));
+        X = X - alf*(Lap_G*X/(numE) + delta*(X-target));
+        %evol = [evol, log(norm( X - mean(X)*ones(dim,1) ,1)) ]; % this is anothe way of measuring the error
         evol = [evol, log(norm( X - target ,1)) ];
         plot( [ 1 : t  ] , evol');
         drawnow;
@@ -178,28 +183,27 @@ if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
         
         for e = 1:numE
             Neig_e = find(Adj_line_G(e,:));
-            %U(:,e, Neig_e) = 0.5*U_old(:,e, Neig_e) +  0.5*permute(  X_old(:, Neig_e,1 )   -  repmat(X_old(:,e,1),1,length(Neig_e),1)   -   U_old(:,Neig_e,e)  , [1, 3, 2]);
             U(:,e, Neig_e) = U(:,e, Neig_e) + (- U(:,e, Neig_e) + permute( -U_old(:,Neig_e,e) - repmat(X(:,e,1),1,length(Neig_e),1) +  X_old(:, Neig_e,1 ), [1, 3, 2]));
         end
         
         XAve = XAve + X; % the paper asks to compute the average in space
         
         evol = [evol, log(norm( X    - target)) ];
-        plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
+        plot([1:1:t*1],evol'); 
         drawnow;
     end
     
 end
 
 
-if (Alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph.
+if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
    
     X = randn(dim,numE,1);
     U = randn(dim,numE,numE);
     U_old = U;
     
     rho = 0.00001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.1;
+    alp = 1;
     
     for t = 1:num_iter
         
@@ -217,14 +221,50 @@ if (Alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = 
         end
                 
         evol = [evol, log(norm( X    - target)) ];
-        plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
+        plot([1:1:t*1],evol'); 
         drawnow;
     end
     
 end
 
 
-if (Alg_name == 6)
+if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
+
+    X = randn(dim,numE);
+    U = randn(dim,numEline);
+    U_old = U;
+    
+    rho = 0.00001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    alp = 1;
+    
+    for t = 1:num_iter
+    
+        X_old = X;
+        U_old = U;
+        
+        for e = 1:numE
+            Neig_e = find(Adj_line_G(e,:));
+            Neig_e_ix = find(E1line == e | E2line == e);
+            X(:,e) =   ProxF(  mean(  X_old(:,Neig_e) - U(:,Neig_e_ix).*(sign(Neig_e - e)) , 2)    ,   e   , rho*length(Neig_e) );     
+        end
+        
+        for linee = 1:numEline
+            e1 = E1line(linee);
+            e2 = E2line(linee);
+
+            U(:,linee) = U_old(:,linee) + alp*( X(:,e1) - X(:,e2) );
+        end
+                
+        evol = [evol, log(norm( X    - target)) ];
+        plot([1:1:t*1],evol'); 
+        drawnow;
+    end
+    
+    
+end
+
+
+if (Alg_name == 7)
     
     X = randn(2,numE);
     Z = randn(dim,1);
@@ -257,47 +297,7 @@ if (Alg_name == 6)
         err = log(norm( Z    - target));
         
         evol = [evol, err ];
-        plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
-        %imagesc(X(:,:,1));
-        drawnow;
-    end
-    
-end
-
-
-if (Alg_name == 7)
-   
-    X = randn(dim,numE,1);
-    U = randn(dim,numE,2); 
-    U_old = U;
-    rho = 0.001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    
-    for t = 1:num_iter
-        X_old = X;
-
-        for e = 1:numE 
-            e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
-            Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
-            Nm = mean(X_old(:,Neig_e1,1) + U_old(:,Neig_e1,1),2) + mean(X_old(:,Neig_e2,1) + U_old(:,Neig_e2,2),2) - 0.5*(U_old(:,e,1) + U_old(:,e,2)) - X_old(:,e,1);
-            X(:,e,1) =   ProxF( Nm   ,   e   , 2*rho* 1);     
-        end
-        
-        U_old = U;
-        
-        for e = 1:numE
-            e1 = E1(e); e2 = E2(e); %this assumes that E1 always has the smaller indices and that E2 always contains the larger indices
-            Neig_e1 = find( E1 == e1); Neig_e2 = find( E2 == e2); 
-            %U(:,e, Neig_e) = permute(    U_old(:,Neig_e,e) - X_old(:, Neig_e,1 ) + repmat(X(:,e,1),1,length(Neig_e),1)   , [1, 3, 2])  ;
-            U(:, Neig_e1,1) = U_old(:,Neig_e1,1) + (X(:,e,1) -  mean(X(:,Neig_e1,1) + U_old(:,Neig_e1,1),2));
-            U(:, Neig_e2,2) = U_old(:,Neig_e2,2) + (X(:,e,1) -  mean( X(:,Neig_e2,1) + U_old(:,Neig_e2,2),2));
-        end
-        
-        err = sum(sum(sum(abs(U - U_old))));
-        err = log(norm( X(:,1,1)    - 1));
-        
-        evol = [evol, err ];
-        plot([1:1:t*1],evol'); % each iteration corresponds to K gossip steps
-        %imagesc(X(:,:,1));
+        plot([1:1:t*1],evol'); 
         drawnow;
     end
     
