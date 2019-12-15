@@ -271,6 +271,33 @@ function GradF = GradF(X, i , Adj_G, D,numE)
     GradF = GradF/numE;
 end
 
+% computes the gradient of the conjugate function (1/E)( |xi - xj|^2 - d^2)^2 + 0.5*delta*|X|^2
+function GradConjF = GradConjF(Y,e,d,numE,delta,E1,E2)
+
+    GradConjF = Y/delta;
+
+    i = E1(e); j = E2(e);
+    xipxj = (1/delta)*(Y(:,i) + Y(:,j));
+    
+    c = norm(Y(:,i) - Y(:,j));
+    a = -8/numE;
+    b = -8*d*d/numE;
+    s = sqrt(-1);
+    tmp(1) = (0.38157*(1.7321*sqrt(27*(a^4)*(c^2) + 4*(a^3)*(b^3)) - 9*(a^2)*c)^(1/3))/a - (0.87358*b)/(1.7321*sqrt(27 *(a^4)* (c^2) + 4* (a^3) *(b^3)) - 9 *(a^2) *c)^(1/3);
+    tmp(2) = ((0.43679 + 0.75654*s)*b)/(1.7321 *sqrt(27 *(a^4) *(c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 - 0.33045 *s) * (1.7321 * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3)) - 9 *(a^2)* c)^(1/3))/a;
+    tmp(3) = ((0.43679 - 0.75654*s)*b)/(1.7321 *sqrt(27 *(a^4)* (c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 + 0.33045 *s) * (1.7321 * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3) -  9 *(a^2)* c)^(1/3))/a;
+    
+    [~, ix] = min(abs(imag(tmp)));
+    
+    normximxj = abs(tmp(ix));
+    
+    ximxj = (1/c)*(Y(:,i) - Y(:,j))*sign(normximxj - d)*normximxj;
+    
+    GradConjF(:,i) = (ximxj + xipxj)/2;
+    GradConjF(:,j) = (ximxj - xipxj)/2;
+
+end
+
 
 % this is the proximal operator min_xi xj  | |xi - xj|^p  - d^p |^q + 0.5*rho*(X - N)^2
 function [x_opt] = ProxF(p,q,N,rho,D,e,E1,E2)
