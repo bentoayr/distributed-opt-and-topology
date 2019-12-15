@@ -1,11 +1,18 @@
-%% testing different algorithms for distributed optimization
+%% testing different algorithms for distributed optimization on the following problem
 %
+%   {(1 / |E|) \sum_{ (i,j) \in E } (x_i - x_j)^2 } + { (1/|V|) (delta/2) * \sum_{i \in V} (x_i - t)^2    }
+%
+%
+% where each x_i is a scalar and G = (V, E) is a graph, and delta is a
+% parameter that we can choose to control the strong convexity of the
+% overall objective
 
-% random graph
+
+%% set the parameters of our problem, the graph and the delta
 global E1 E2 delta numE target
 
-dim = 30;
-G = rand(dim) > 0.5;
+dim = 30; % number of nodes in the graph
+G = rand(dim) > 0.5; % random matrix
 G = graph(triu(G,1) + triu(G,1)'); % undirected random E-R graph. This is not a matrix. It is a graph object.
 
 % get a few matrices from the graph G
@@ -20,7 +27,6 @@ Lap_line_G = laplacian(line_G);
 % we make a simple choice for the Gossip matrix, it being equal to the Laplacian of our line graph
 W = Lap_line_G;
 
-%[E1, E2] = find(triu(Adj_G,1));
 
 E1 = G.Edges.EndNodes(:,1);
 E2 = G.Edges.EndNodes(:,2);
@@ -30,17 +36,15 @@ E2line = line_G.Edges.EndNodes(:,2);
 %the code above makes sure that E1 always has the smaller indices and that E2 the larger indices
 
 
-%E1E2 = sort([E1, E2] , 2);
-%E1 = E1E2(:,1);E2 = E1E2(:,2); %makes sure E1 always has the smaller indices and E2 the larger indices
-
 numE = G.numedges;
 numEline = line_G.numedges;
 
 
 delta = 0.001;
+delta = delta / dim; % it makes sense to scale delta with 1/dim so that both terms in our objective have the same order of magnitude as the graph grows
 target = -0.342; 
 
-% Scaman et al. 2017, Algorithm 1 and Algorithm 2
+%% set some parameters to be used in algorithm 1, 2 and 3 from Scaman et al. 2017 and 2018
 Y = rand(dim, numE)*real(sqrtm(full(W)));
 X = Y;
 
@@ -80,13 +84,8 @@ M = num_iter;
 eps = 4*R*L_l/num_iter; % %note that there is a typo in the arxiv paper "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks" in the specificaion of the Alg 2. In the definition of T. It should be T = 4 R L_l / eps
 W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 
-% tmp = 0*randn(dim,1);
-% [X_out] = ProxF(tmp, 2, 0.4);
-% [X_out_2] = AppProxF(tmp, 2, 0.4,1000,eta_3);
-% [norm(X_out-X_out_2), norm(X_out-tmp)]
-% X_out
-% return;
 
+%% choose the algorithm and run it
 
 Alg_name = 4;
 
@@ -264,7 +263,7 @@ if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
 end
 
 
-if (Alg_name == 7)
+if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
     
     X = randn(2,numE);
     Z = randn(dim,1);
