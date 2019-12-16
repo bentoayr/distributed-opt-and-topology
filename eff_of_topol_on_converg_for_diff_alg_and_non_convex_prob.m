@@ -1,4 +1,3 @@
-
 % random graph
 numV = 30;
 G = rand(numV) > 0.5;
@@ -32,11 +31,11 @@ dim = 2;
 D = ones(numV);%rand(numV); % matrix of random distances. Note that only the distances corresponding to pairs that are edges matter. The rest does not matter.
 D = (D + D')/2; % This is not really necessary, but makes D more interpertable
 
-delta = 1; % this delta is already rescaled
+delta = 1; % this delta is already rescaled by E
 target = 1; % this pushes all of the points to the (1,1,1,1,1,1....,1) region of the space
 
-p = 1;
-q = 1;
+p = 2;
+q = 2;
 
 evol = [];
 
@@ -81,7 +80,7 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 
 num_iter = 10000;
 
-Alg_name = 1;
+Alg_name = 3;
 
 if (Alg_name == 0)
     
@@ -95,44 +94,106 @@ if (Alg_name == 0)
         
         err =  log(compute_objective(X,D,p,q,E1,E2));
 
-        evol = [evol, err ];
-        plot([1:1:t*1],evol'); 
-        %scatter(X(1,:)',X(2,:)'); % we can vizualize the position of the points
+        %evol = [evol, err ];
+        %plot([1:1:t*1],evol'); 
+        scatter(X(1,:)',X(2,:)'); % we can vizualize the position of the points
         drawnow;
         
     end
 
 end
-    
 
+
+
+% there is some problem with the convergence of this algorithm for the non
+% convex problem
 if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
+    %delta = 100;
+    eta_1 = 0.001&eta_1;
+    mu_1  = 0.5*mu_1;
     for t = 1:num_iter
         for e = 1:numE 
             i = E1(e); j = E2(e); d = D(i,j);
-            Theta(:,:,e) = GradConjF( X(:,:,e), e,d,numE,delta,E1,E2);
+            Theta(:,:,e) = GradConjF( X(:,:,e), e, d, numE, delta/numV , E1, E2); % we rescale delta by numV so that the two terms in our objective have more or less the same size regardless of the size of the graph that we are deadling with        
         end
         Y_old = Y;
         
         % this could be done more efficiently
-        Theta = reshape(Theta,dim*numV,numE);
+        % notice that reshaping operations take almost no time
+        Theta = reshape(Theta, dim*numV, numE);
         ThetaW = Theta*W;
-        ThetaW = reshape(ThetaW,dim,numV,numE);
+        ThetaW = reshape(ThetaW, dim, numV, numE);
         Theta = reshape(Theta,dim,numV,numE);
         
         Y = X - eta_1*ThetaW;
-        X = (1 + mu_1)*Y - mu_1*Y_old;
+        X = (1 + 0.5*mu_1)*Y - mu_1*Y_old;
         
         err =  log(compute_objective(X(:,:,1),D,p,q,E1,E2));
         
-        %evol = [evol, err ];
-        %plot([1:1:t*1],evol'); 
-        scatter(X(1,:,1)',X(2,:,1)'); % we can vizualize the position of the points
+        evol = [evol, err ];
+        plot([1:1:t*1], evol'); 
+        %scatter(X(1,:,1)',X(2,:,1)'); % we can vizualize the position of the points
 
         drawnow;
         
     end
 end
 
+if (Alg_name == 3)
+  
+       
+    if (norm(full(W_Acc),2)*sigma*eta_3 > 1)
+        disp(['Convergene condition not met because ', num2str(norm(full(W_Acc),2)*sigma*eta_3), ' is bigger than 1']);
+        %return;
+    end
+       
+    
+    for t = 1:num_iter
+
+        % reshape Theta and Theta_old
+        Theta = reshape(Theta, dim*numV, numE);
+        Theta_old = reshape(Theta_old, dim*numV, numE);
+        
+        % appy distributed averaging operator
+        ThetaW = AccGoss(2*Theta - Theta_old, W, K,c2,c3);
+        % reshape result
+        ThetaW = reshape(ThetaW, dim,numV, numE);
+        
+        % update dual
+        Y = Y - sigma*ThetaW;
+
+        % reshape back
+        Theta = reshape(Theta, dim,numV, numE);
+        Theta_old = reshape(Theta_old, dim,numV, numE);
+        
+        
+        Theta_old = Theta;
+        Theta_tilde = Theta;
+        for e = 1:numE
+
+            Theta_tilde(:,:,e) = ProxF(p,q, eta_3*Y(:,:,e) + Theta(:,:,e) , 1/eta_3,D,e, E1, E2 );
+            
+            %ProxF(p,q,N,rho,D,e,E1,E2)
+
+
+        end
+        Theta = Theta_tilde;
+        
+        sum_Theta = sum_Theta + sum(Theta,3)/numE; % the paper asks to compute the average in space and time
+        
+        err =  log(compute_objective(sum_Theta,D,p,q,E1,E2));
+        
+        %evol = [evol, err ];
+        %plot([1:1:t*1],evol'); 
+        scatter(sum_Theta(1,:)',sum_Theta(2,:)'); % we can vizualize the position of the points
+
+        drawnow;
+        
+        
+    end
+    
+    
+end
 
 if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
    
@@ -379,15 +440,20 @@ function test_GradF_and_Conj_Grad_F()
         numV = 5;
         X = randn(dim,numV);
 
-        E1 = 1;
-        E2 = 2;
+        E1 = 4;
+        E2 = 5;
         e = 1;
 
-        Y = GradFPair(X,e,d,numE,delta,E1,E2);
-
-        YY = GradConjF(Y,e,d,numE,delta,E1,E2);
+        Y = GradConjF(X,e,d,numE,delta,E1,E2);
+        
+        YY = GradFPair(Y,e,d,numE,delta,E1,E2);
 
         disp(norm(YY-X));
+        
+        if (  norm(YY-X)   > 10^-5)
+            1 == 1;
+        end
+        
     end
     
 end
@@ -443,6 +509,7 @@ end
 
 
 % computes the gradient of the conjugate function (1/E)( |xi - xj|^2 - d^2)^2 + 0.5*delta*|X|^2 )
+% the conjugate gradient is basically minimizing <X,Y> - f(X) where f(X) is the function above
 function GradConjF = GradConjF(Y,e,d,numE,delta,E1,E2)
 
     delta = delta/numE; % we have this here because the (1/E) is multiplying delta in the objective of our PO
@@ -455,36 +522,47 @@ function GradConjF = GradConjF(Y,e,d,numE,delta,E1,E2)
     i = E1(e); j = E2(e);
     xipxj = (1/delta)*(Y(:,i) + Y(:,j));
 
-    r = 1;
-    % this loop will at most be executed twice. Once with r = 1 and once with r = -1.
-    while (1)
-        c = -norm(Y(:,i) - Y(:,j));
-
-        a = r*8/numE;
-        b = r*(delta - (8*d*d/numE));
-        s = sqrt(-1);
+    tmp = zeros(6,1);
     
-        tmp = zeros(3,1);
-        tmp(1) = (0.38157*(1.7321*sqrt(27*(a^4)*(c^2) + 4*(a^3)*(b^3)) - 9*(a^2)*c)^(1/3))/a - (0.87358*b)/(1.7321*sqrt(27 *(a^4)* (c^2) + 4* (a^3) *(b^3)) - 9 *(a^2) *c)^(1/3);
-        tmp(2) = ((0.43679 + 0.75654*s)*b)/(1.7321 *sqrt(27 *(a^4) *(c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 - 0.33045 *s) * (1.7321 * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3)) - 9 *(a^2)* c)^(1/3))/a;
-        tmp(3) = ((0.43679 - 0.75654*s)*b)/(1.7321 *sqrt(27 *(a^4)* (c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 + 0.33045 *s) * (1.7321 * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3)) -  9 *(a^2)* c)^(1/3))/a;
+    % we need to test the different possible solutions of two possible cubic polinomials
+    % for numerical reasons we also need to check the objective at the end.
+    % it is not enough to simply look for the real root.
+    
+    r = 1;
+    c = -norm(Y(:,i) - Y(:,j));
+    a = r*8/numE;
+    b = r*(delta - (8*d*d/numE));
+    s = sqrt(-1);
+    tmp(1) = (((1/18)^(1/3))*(sqrt(3)*sqrt(27*(a^4)*(c^2) + 4*(a^3)*(b^3)) - 9*(a^2)*c)^(1/3))/a - (0.87358*b)/(sqrt(3)*sqrt(27 *(a^4)* (c^2) + 4* (a^3) *(b^3)) - 9 *(a^2) *c)^(1/3);
+    tmp(2) = ((((1/12)^(1/3)) + 0.75654*s)*b)/(sqrt(3) *sqrt(27 *(a^4) *(c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 - 0.33045 *s) * (sqrt(3) * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3)) - 9 *(a^2)* c)^(1/3))/a;
+    tmp(3) = ((((1/12)^(1/3)) - 0.75654*s)*b)/(sqrt(3) *sqrt(27 *(a^4)* (c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 + 0.33045 *s) * (sqrt(3) * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3)) - 9 *(a^2)* c)^(1/3))/a;
 
-        [~, ix] = min(abs(imag(tmp)));
+    r = -1;
+    c = -norm(Y(:,i) - Y(:,j));
+    a = r*8/numE;
+    b = r*(delta - (8*d*d/numE));
+    s = sqrt(-1);
+    tmp(4) = (((1/18)^(1/3))*(sqrt(3)*sqrt(27*(a^4)*(c^2) + 4*(a^3)*(b^3)) - 9*(a^2)*c)^(1/3))/a - (0.87358*b)/(sqrt(3)*sqrt(27 *(a^4)* (c^2) + 4* (a^3) *(b^3)) - 9 *(a^2) *c)^(1/3);
+    tmp(5) = ((((1/12)^(1/3)) + 0.75654*s)*b)/(sqrt(3) *sqrt(27 *(a^4) *(c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 - 0.33045 *s) * (sqrt(3) * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3)) - 9 *(a^2)* c)^(1/3))/a;
+    tmp(6) = ((((1/12)^(1/3)) - 0.75654*s)*b)/(sqrt(3) *sqrt(27 *(a^4)* (c^2) + 4 *(a^3) *(b^3)) - 9 *(a^2) * c)^(1/3) - ((0.19079 + 0.33045 *s) * (sqrt(3) * sqrt(27* (a^4) * (c^2) + 4 *(a^3) * (b^3)) - 9 *(a^2)* c)^(1/3))/a;
 
-        normximxj = real(tmp(ix));
-        if (normximxj > 0)
+    pos_ix = (abs(imag(tmp)) < 10^(-5)) & (real(tmp) > 0);
+    
+    % search for the solution that correctly inverts the gradient
+    % we can break the for-loop after we find one solution
+    for normximxj = real(tmp(pos_ix))'
+    
+        ximxj = (-1/c)*(Y(:,i) - Y(:,j))*sign(normximxj^2 - d^2 + delta*numE/8)*normximxj;
+        GradConjF(:,i) = (ximxj + xipxj)/2;
+        GradConjF(:,j) = (-ximxj + xipxj)/2;
+        
+        if (norm(GradFPair(GradConjF,e,d,numE,delta*numE,E1,E2) - Y) < 10^(-5))
             break;
-        else
-            r = r*(-1);
         end
     end
-    
-    
-    ximxj = (-1/c)*(Y(:,i) - Y(:,j))*sign(normximxj^2 - d^2 + delta*numE/8)*normximxj;
-    
-    GradConjF(:,i) = (ximxj + xipxj)/2;
-    GradConjF(:,j) = (-ximxj + xipxj)/2;
 
+    
+    
 end
 
 
