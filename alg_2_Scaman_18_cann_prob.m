@@ -1,4 +1,4 @@
-function evol = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R)
+function [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R)
 
     W = Lap_line_G;
 

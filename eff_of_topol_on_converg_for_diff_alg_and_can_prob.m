@@ -11,8 +11,8 @@
 %% set the parameters of our problem, the graph and the delta
 %global E1 E2 delta numE target
 
-dim = 30; % number of nodes in the graph
-G = rand(dim) > 0.5; % random matrix
+dim = 40; % number of nodes in the graph
+G = rand(dim) > 1/(dim/log(dim)); % random matrix
 G = graph(triu(G,1) + triu(G,1)'); % undirected random E-R graph. This is not a matrix. It is a graph object.
 
 % get a few matrices from the graph G
@@ -27,7 +27,6 @@ Lap_line_G = laplacian(line_G);
 % we make a simple choice for the Gossip matrix, it being equal to the Laplacian of our line graph
 W = Lap_line_G;
 
-
 E1 = G.Edges.EndNodes(:,1);
 E2 = G.Edges.EndNodes(:,2);
 
@@ -35,120 +34,133 @@ E1line = line_G.Edges.EndNodes(:,1);
 E2line = line_G.Edges.EndNodes(:,2);
 %the code above makes sure that E1 always has the smaller indices and that E2 the larger indices
 
-
 numE = G.numedges;
 numEline = line_G.numedges;
 
-
 delta = 0.001;
-delta = delta / dim; % it makes sense to scale delta with 1/dim so that both terms in our objective have the same order of magnitude as the graph grows
+delta = delta / dim; % we scale delta with 1/dim so that both terms in our objective have the same order of magnitude as the graph grows
 target = -0.342; 
 
-%% set some parameters to be used in algorithm 1, 2 and 3 from Scaman et al. 2017 and 2018
-% Y = rand(dim, numE)*real(sqrtm(full(W)));
-% X = Y;
-% 
-% Theta = repmat(rand(dim,1),1,numE);
-% Theta_old = Theta;
-% 
-% num_iter = 10000;
-% 
-% alpha = delta;
-% beta  = 2 + delta;
-% 
-% % the choice of the following values is according to Scaman et al. 2017, "Optimal algorithms for smooth and strongly convexdistributed optimization in networks"
-% kappa_l = beta / alpha; 
-% specW = sort(eig(W)); 
-% eta_1 = alpha/specW(end); 
-% gamma = specW(2)/specW(end);
-% mu_1 = (sqrt(kappa_l) - sqrt(gamma)) / (sqrt(kappa_l) + sqrt(gamma));
-% c1 = (1 - sqrt(gamma))/ (1 + sqrt(gamma));
-% c2 = (1 + gamma) / (1 - gamma);
-% c3 = 2/ ((1+gamma)*specW(end));
-% K = floor(1 / sqrt(gamma));
-% eta_2 = alpha*(1 + c1^(2*K))/((1 + c1^K)^2);
-% mu_2 = ((1 + c1^K)*sqrt(kappa_l) - 1 + c1^K) / ((1 + c1^K)*sqrt(kappa_l) + 1 - c1^K);
-% 
-% 
-% R = 1; 
-% L_is = (2 + delta)*ones(numE , 1);
-% L_l = norm(L_is,2)/sqrt(numE);
-% 
-% fixing_factor = 3;
-% 
-% eta_3  = ((1 - c1^K)/(1 + c1^K))*(numE*R/L_l);
-% sigma = (1/fixing_factor)*(1/eta_3)*(1 + c1^(2*K))/((1 - c1^K)^2); %note that there is a typo in the arxiv paper "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks" in the specificaion of the Alg 2. In the definition of sigma, tau should be eta
-% sum_Theta = 0;
-% 
-% M = num_iter;
-% eps = 4*R*L_l/num_iter; % %note that there is a typo in the arxiv paper "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks" in the specificaion of the Alg 2. In the definition of T. It should be T = 4 R L_l / eps
-% W_Acc = AccGoss(eye(numE), W, K,c2,c3);
-
-
 %% choose the algorithm and run it
+Alg_name = 3;
 
-Alg_name = 6;
-
-evol = [];
 
 if (Alg_name == 0) %Gradient descent
     X = rand(dim,1);
     alf = 1;
-    num_iter = 2000000;
-    evol = grad_desc_cann_prob(X, alf, num_iter, Lap_G, numE , delta, target);
-    plot( [ 1 : num_iter  ] , evol');
-    drawnow;    
+    num_iter = 200000;
+
+    alf_range = 0.01:0.01:0.1;
+    rate_evol = [];
+    for alf = alf_range
+        evol = grad_desc_cann_prob(X, alf*numE, num_iter, Lap_G, numE , delta, target);
+        plot( [ 1 : num_iter  ] , evol');
+        drawnow;    
+        rate_est = estimate_rate_out_of_plot(evol);
+        rate_evol = [rate_evol, rate_est];
+        disp(rate_est);
+        %curr_val = rate_est;
+        %[val_hist,left_limit,right_limit,curr_parameter] = do_bisection_search(left_limit, right_limit, curr_parameter, num_steps, val_hist, curr_val);
+    end
+    best_rate_alg_0 = min(rate_evol(rate_evol < 0));
+    best_alf_alg_0 = alf_range(rate_evol == best_rate_alg_0);
+    disp(best_rate);
 end
 
 if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
-    
+    % note that this algorithm is built to minimize the average of (1/n)
+    % sum_i f_i for some functions f_i, whose Conjugate Gradient we use
+    % bellow. For us i are edges and n is the number of edges, and f_e =
+    % 0.5*(xi - xj)^2 + 0.5*(delta/dim)*|X|^2, where, we recall, delta/dim is done above 
     Y_init = rand(dim, numE);
     Theta_init = rand(dim,1);
     alpha = delta;
     beta  = 2 + delta;
-    num_iter = 10000;
+    num_iter = 1000;
     
-    evol = alg_1_Scaman_17_cann_prob(Y_init, Theta_init, @GradConjF, num_iter,dim, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
-    plot( [ 1 : num_iter  ] , evol');
-    drawnow;
- 
+    alpha_range = delta/2: delta/5 :2*delta;
+    beta_range = (2 + delta)/5: (2 + delta)/5 :2*(2 + delta);
+    rate_evol = [];
+    for alpha =  alpha_range
+        for beta = beta_range
+            evol = alg_1_Scaman_17_cann_prob(Y_init, Theta_init, @GradConjF, num_iter, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
+            plot( [ 1 : num_iter  ] , evol');
+            drawnow;
+            rate_est = estimate_rate_out_of_plot(evol);
+            rate_evol = [rate_evol, rate_est];
+            disp(rate_est);
+        end
+    end
+    best_rate_alg_1 = min(rate_evol(rate_evol < 0));
+    best_alg_1_ix = find(rate_evol == best_rate_alg_1);
+    best_beta_alg_1 = beta_range(mod(best_alg_1_ix-1,length(beta_range))+1);
+    best_alf_alg_1 = alpha_range(floor((best_alg_1_ix-1)/length(beta_range))+1);
+    
 end
 
 if (Alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
+    % note that this algorithm is built to minimize the average of (1/n)
+    % sum_i f_i for some functions f_i, whose Conjugate Gradient we use
+    % bellow. For us i are edges and n is the number of edges, and f_e =
+    % 0.5*(xi - xj)^2 + 0.5*(delta/dim)*|X|^2, where, we recall, delta/dim is done above 
     
     Y_init = rand(dim, numE);
     Theta_init = rand(dim,1);
     alpha = delta;
     beta  = 2 + delta;
-    num_iter = 10000;
+    num_iter = 3000;
     
-    evol = alg_2_Scaman_17_cann_prob(Y_init, Theta_init , @GradConjF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
+    alpha_range = delta/2: delta/5 :2*delta;
+    beta_range = (2 + delta)/5: (2 + delta)/5 :2*(2 + delta);
+    rate_evol = [];
+    for alpha =  alpha_range
+        for beta = beta_range
+            [evol,K] = alg_2_Scaman_17_cann_prob(Y_init, Theta_init , @GradConjF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
     
-    plot([1:K:num_iter*K],evol'); % each iteration corresponds to K gossip steps
-    drawnow;
-    
+            plot([1:K:num_iter*K],evol'); % each iteration corresponds to K gossip steps
+            drawnow;
+            rate_est = estimate_rate_out_of_plot(evol);
+            rate_evol = [rate_evol, rate_est];
+            disp(rate_est);
+        end
+    end
+    best_rate_alg_2 = min(rate_evol(rate_evol < 0));
+    best_alg_2_ix = find(rate_evol == best_rate_alg_2);
+    best_beta_alg_2 = beta_range(mod(best_alg_2_ix-1,length(beta_range))+1);
+    best_alf_alg_2 = alpha_range(floor((best_alg_2_ix-1)/length(beta_range))+1);
+            
 end
 
 if (Alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks"
+    % note that this algorithm is built to minimize the average of (1/n)
+    % sum_i f_i for some functions f_i, whose Proximal Operator we use
+    % bellow. The algorithm specifies that the proximal operator should be
+    % computed for (1/n) f_i, and we do so.
+    % For us i are edges and n is the number of edges, and f_e =
+    % 0.5*(xi - xj)^2 + 0.5*(delta/dim)*|X|^2, where, we recall, delta/dim is done above 
     
     Y_init = rand(dim, numE);
     Theta_init = rand(dim,1);
     
     L_is = (2 + delta)*ones(numE , 1);
     R = 1;
-    num_iter = 10000;
+    num_iter = 2000;
     
-    evol = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , @ProxF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R);
+    rate_evol = [];
     
+    [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , @ProxF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R);
     plot([1:K:num_iter*K],evol'); % each iteration corresponds to K gossip steps
     drawnow;
-
+    rate_est = estimate_rate_out_of_plot(evol);
+    rate_evol = [rate_evol, rate_est];
+    disp(rate_est);
+    
 end
 
 if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
    
-    X_init = randn(dim,numE,1);
-    U_init = randn(dim,numE,numE);
+    X_init = randn(dim, numE, 1);
+    U_init = randn(dim, numE, numE);
     
     rho = 0.00001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 0.1;
@@ -158,7 +170,8 @@ if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
     
     plot([1:1:num_iter],evol'); 
     drawnow;
-    
+    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
+
 end
 
 
@@ -175,6 +188,7 @@ if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
     
     plot([1:1:num_iter*1],evol'); 
     drawnow;
+    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
         
 end
 
@@ -192,6 +206,8 @@ if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
     
     plot([1:1:num_iter*1],evol'); 
     drawnow;
+    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
+
         
 end
 
@@ -211,11 +227,35 @@ if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E)
     
     plot([1:1:num_iter*1],evol'); 
     drawnow;
+    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
+
         
 end
 
+function test_GradConjF()
+    while(1)
+        dim = 3;
+        X = rand(dim,1);
+        i = 1;
+        E1 = 1;
+        E2 = 2;
+        target = 1;
+        delta = 0.01;
+
+        [GRAD] = GradF(X, i,delta,E1,E2,target);
+
+        [XX] = GradConjF(GRAD, i, delta, E1,E2,target);
+
+        disp(norm(X - XX));
+        if (norm(X - XX) > 10^(-5))
+            break;
+        end
+    end
+    
+end
 
 % this function computes the gradient of conjugate of the i-th function in the objective that we are trying to optimize
+% namely, the conjudate gradient of (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 )
 function [GRAD] = GradConjF(X, i, delta, E1,E2,target)
     %global delta E1 E2 target
     d = delta;

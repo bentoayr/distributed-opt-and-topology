@@ -1,4 +1,4 @@
-function evol = alg_1_Scaman_17_cann_prob(Y_init, Theta_init , GradConjF, num_iter,dim, numE , Lap_line_G, delta, E1,E2,target,alpha, beta)
+function evol = alg_1_Scaman_17_cann_prob(Y_init, Theta_init , GradConjF, num_iter, numE , Lap_line_G, delta, E1,E2,target,alpha, beta)
 
     W = Lap_line_G;
 
