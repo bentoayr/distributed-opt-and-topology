@@ -11,7 +11,7 @@
 %% set the parameters of our problem, the graph and the delta
 %global E1 E2 delta numE target
 
-dim = 40; % number of nodes in the graph
+dim = 10; % number of nodes in the graph
 G = rand(dim) > 1/(dim/log(dim)); % random matrix
 G = graph(triu(G,1) + triu(G,1)'); % undirected random E-R graph. This is not a matrix. It is a graph object.
 
@@ -42,12 +42,14 @@ delta = delta / dim; % we scale delta with 1/dim so that both terms in our objec
 target = -0.342; 
 
 %% choose the algorithm and run it
-Alg_name = 3;
-
+Alg_name = 7;
 
 if (Alg_name == 0) %Gradient descent
     X = rand(dim,1);
-    alf = 1;
+    
+    mu = delta;
+    L  = 2/numE + delta;
+    alf = 2 / (mu + L);
     num_iter = 200000;
 
     alf_range = 0.01:0.01:0.1;
@@ -64,7 +66,6 @@ if (Alg_name == 0) %Gradient descent
     end
     best_rate_alg_0 = min(rate_evol(rate_evol < 0));
     best_alf_alg_0 = alf_range(rate_evol == best_rate_alg_0);
-    disp(best_rate);
 end
 
 if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
@@ -110,8 +111,8 @@ if (Alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex di
     beta  = 2 + delta;
     num_iter = 3000;
     
-    alpha_range = delta/2: delta/5 :2*delta;
-    beta_range = (2 + delta)/5: (2 + delta)/5 :2*(2 + delta);
+    alpha_range = delta/2: delta/3 :3*delta;
+    beta_range = (2 + delta)/5: (2 + delta)/3 :3*(2 + delta);
     rate_evol = [];
     for alpha =  alpha_range
         for beta = beta_range
@@ -142,18 +143,25 @@ if (Alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optim
     Y_init = rand(dim, numE);
     Theta_init = rand(dim,1);
     
-    L_is = (2 + delta)*ones(numE , 1);
-    R = 1;
-    num_iter = 2000;
+    L_is = 1*(2 + delta)*ones(numE , 1);
+    R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
+    fixing_factor = 3; %this does not seem to make a big difference.
+    num_iter = 50000;
     
-    rate_evol = [];
-    
-    [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , @ProxF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R);
-    plot([1:K:num_iter*K],evol'); % each iteration corresponds to K gossip steps
-    drawnow;
-    rate_est = estimate_rate_out_of_plot(evol);
-    rate_evol = [rate_evol, rate_est];
-    disp(rate_est);
+    L_is_range = 0.01*(2 + delta):0.01*(2 + delta):0.1*(2 + delta);
+    rate_evol = [ ];
+    for L_is_val =  L_is_range
+            L_is = L_is_val*ones(numE , 1);
+            [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , @ProxF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R, fixing_factor);
+            plot([1:K:num_iter*K],evol'); % each iteration corresponds to K gossip steps
+            drawnow;
+            rate_est = estimate_rate_out_of_plot(evol);
+            rate_evol = [rate_evol, rate_est];
+            disp(rate_est);
+    end
+    best_rate_alg_3 = min(rate_evol(rate_evol < 0));
+    best_alg_3_ix = find(rate_evol == best_rate_alg_3);
+    best_L_is_val_alg_3 = L_is_range(  best_alg_3_ix  );
     
 end
 
@@ -162,20 +170,33 @@ if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
     X_init = randn(dim, numE, 1);
     U_init = randn(dim, numE, numE);
     
-    rho = 0.00001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 0.1;
-    num_iter = 1000;
+    num_iter = 300;
+       
+    alpha_range = 0.001:0.001:0.01;
+    rho_range = 0.000001:0.000001:0.00001;%:0.0000001:0.00001;
+    rate_evol = [];
+    for alp =  alpha_range
+        for rho = rho_range
+            evol = PDMM_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter,  Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
     
-    evol = PDMM_cann_prob(X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, @ProxF ,  E1, E2, delta, target);
-    
-    plot([1:1:num_iter],evol'); 
-    drawnow;
-    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
+            plot([1:1:num_iter],evol'); 
+            drawnow;
+            rate_est = estimate_rate_out_of_plot(evol);
+            rate_evol = [rate_evol, rate_est];
+
+            disp(rate_est);
+        end
+    end
+    best_rate_alg_4 = min(rate_evol(rate_evol < 0));
+    best_alg_4_ix = find(rate_evol == best_rate_alg_4);
+    best_rho_alg_4 = rho_range(mod(best_alg_4_ix-1,length(rho_range))+1);
+    best_alf_alg_4 = alpha_range(floor((best_alg_4_ix-1)/length(rho_range))+1);
 
 end
 
-
-if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
+if (Alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
    
     X_init = randn(dim,numE,1);
     U_init = randn(dim,numE,numE);
@@ -184,16 +205,34 @@ if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
     alp = 0.1;
     num_iter = 1000;
     
-    evol = ADMM_edge_Z_edge_cann_prob(X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, @ProxF ,  E1, E2, delta, target);
-    
-    plot([1:1:num_iter*1],evol'); 
-    drawnow;
-    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
+    alpha_range = 0.001:0.003:0.03;
+    rho_range = 0.000001:0.000001:0.00001;%:0.0000001:0.00001;
+    rate_evol = [];
+    for alp =  alpha_range
+        for rho = rho_range
+            evol = ADMM_edge_Z_edge_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter,  Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
+            rate_est = estimate_rate_out_of_plot(evol);
+
+            plot([1:1:num_iter*1],evol'); 
+            drawnow;
+            disp(rate_est);
+            
+            rate_evol = [rate_evol, rate_est];
+
+            disp(rate_est);
         
+        end
+    end
+    best_rate_alg_5 = min(rate_evol(rate_evol < 0));
+    best_alg_5_ix = find(rate_evol == best_rate_alg_5);
+    best_rho_alg_5 = rho_range(mod(best_alg_5_ix-1,length(rho_range))+1);
+    best_alf_alg_5 = alpha_range(floor((best_alg_5_ix-1)/length(rho_range))+1);
+    
+    
 end
 
 
-if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
+if (Alg_name == 6) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
 
     X_init = randn(dim,numE);
     U_init = randn(dim,numEline);
@@ -202,34 +241,66 @@ if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
     alp = 1;
     num_iter = 1000;
    
-    evol = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, @ProxF ,numEline, E1line, E2line, E1, E2, delta, target);
     
-    plot([1:1:num_iter*1],evol'); 
-    drawnow;
-    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
+    alpha_range = 0.01:0.04:0.4;
+    rho_range = 0.000001:0.000001:0.00001;%:0.0000001:0.00001;
+    rate_evol = [];
+    for alp =  alpha_range
+        for rho = rho_range
+            evol = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter,  Adj_line_G, @ProxF ,numEline, E1line, E2line, E1, E2, delta / numE, target);
+            
+            rate_est = estimate_rate_out_of_plot(evol);
 
+            plot([1:1:num_iter*1],evol'); 
+            drawnow;
+            disp(rate_est);
+            
+            rate_evol = [rate_evol, rate_est];
+
+            disp(rate_est);
         
+        end
+    end
+    best_rate_alg_6 = min(rate_evol(rate_evol < 0));
+    best_alg_6_ix = find(rate_evol == best_rate_alg_6);
+    best_rho_alg_6 = rho_range(mod(best_alg_6_ix-1,length(rho_range))+1);
+    best_alf_alg_6 = alpha_range(floor((best_alg_6_ix-1)/length(rho_range))+1);    
+    
 end
 
 
-if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
+if (Alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
     
     X_init = randn(2,numE);
     Z_init = randn(dim,1);
     U_init = randn(2,numE); 
     
-    U_old = U;
     rho = 0.0001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 0.1;
     num_iter = 1000;
    
-    evol = ADMM_node_Z_node_cann_prob(X_init, U_init, Z_init, rho, alp,dim, numE, num_iter, @ProxFPair , E1, E2, delta, target);
-    
-    plot([1:1:num_iter*1],evol'); 
-    drawnow;
-    disp((evol(end-length(evol)/2) - evol(end))/(length(evol)/2));
+    alpha_range = 0.01:0.05:3;
+    rho_range = 0.00001:0.00001:0.0001;%:0.0000001:0.00001;
+    rate_evol = [];
+    for alp =  alpha_range
+        for rho = rho_range
+            evol = ADMM_node_Z_node_cann_prob(X_init, U_init, Z_init, rho, alp,dim, numE, num_iter, @ProxFPair , E1, E2, delta, target);
+            rate_est = estimate_rate_out_of_plot(evol);
 
-        
+            plot([1:1:num_iter*1],evol'); 
+            drawnow;
+            disp(rate_est);
+            
+            rate_evol = [rate_evol, rate_est];
+
+            disp(rate_est);
+        end
+    end
+    best_rate_alg_7 = min(rate_evol(rate_evol < 0));
+    best_alg_7_ix = find(rate_evol == best_rate_alg_7);
+    best_rho_alg_7 = rho_range(mod(best_alg_7_ix-1,length(rho_range))+1);
+    best_alf_alg_7 = alpha_range(floor((best_alg_7_ix-1)/length(rho_range))+1);  
+       
 end
 
 function test_GradConjF()
@@ -280,7 +351,7 @@ function [GRAD] = GradF(X, i,delta,E1,E2,target)
 end
 
 % this is the proximal operator 
-% Prox(N) = argmin_X    (1/numE) (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 )+ 0.5*rho* (X - N)^2
+% Prox(N) = argmin_X    (1/numE)*(0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 ) + 0.5*rho* (X - N)^2
 function [X_out] = ProxF(N, e, rho, E1, E2, numE, delta, target)
     %global E1 E2 numE delta target
     

@@ -80,7 +80,7 @@ W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 
 num_iter = 10000;
 
-Alg_name = 3;
+Alg_name = 0;
 
 if (Alg_name == 0)
     

@@ -1,4 +1,4 @@
-function [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R)
+function [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R,     fixing_factor)
 
     W = Lap_line_G;
 
@@ -13,7 +13,6 @@ function [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGo
     
     L_l = norm(L_is,2)/sqrt(numE);
 
-    fixing_factor = 3;
 
     eta_3  = ((1 - c1^K)/(1 + c1^K))*(numE*R/L_l);
     sigma = (1/fixing_factor)*(1/eta_3)*(1 + c1^(2*K))/((1 - c1^K)^2); %note that there is a typo in the arxiv paper "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks" in the specificaion of the Alg 2. In the definition of sigma, tau should be eta
