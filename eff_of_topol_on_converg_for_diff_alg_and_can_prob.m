@@ -7,11 +7,24 @@
 % parameter that we can choose to control the strong convexity of the
 % overall objective
 
+%% define the variable where everything will be stored
+
+
+all_rates_all_graphs = cell(length( 5:5:40)*length(1:10),2,8);
+file_name_to_save_work_space = ['cann_prob_test_random_ER_graph_diff_size_rep_algs_created_on_' datestr(datetime)];
 
 %% set the parameters of our problem, the graph and the delta
 %global E1 E2 delta numE target
 
-dim = 10; % number of nodes in the graph
+
+parfor mem_ix = 1:80 % we use the outer for-loop to search over different graph sizes and repetitions for each graph size
+
+dim_count = 1 + mod(mem_ix - 1 ,length(5:5:40));
+dim = dim_count*5;
+num_reps_count =  1 + floor((mem_ix - 1) / length(5:5:40));
+num_reps = num_reps_count;
+    
+
 G = rand(dim) > 1/(dim/log(dim)); % random matrix
 G = graph(triu(G,1) + triu(G,1)'); % undirected random E-R graph. This is not a matrix. It is a graph object.
 
@@ -42,9 +55,11 @@ delta = delta / dim; % we scale delta with 1/dim so that both terms in our objec
 target = -0.342; 
 
 %% choose the algorithm and run it
-Alg_name = 7;
+alg_name_count = 0;
+for alg_name = 0:7
+alg_name_count = alg_name + 1;
 
-if (Alg_name == 0) %Gradient descent
+if (alg_name == 0) %Gradient descent
     X = rand(dim,1);
     
     mu = delta;
@@ -66,9 +81,13 @@ if (Alg_name == 0) %Gradient descent
     end
     best_rate_alg_0 = min(rate_evol(rate_evol < 0));
     best_alf_alg_0 = alf_range(rate_evol == best_rate_alg_0);
+    
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_0, best_alf_alg_0};
+    save(file_name_to_save_work_space);
+    
 end
 
-if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
+if (alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
     % note that this algorithm is built to minimize the average of (1/n)
     % sum_i f_i for some functions f_i, whose Conjugate Gradient we use
     % bellow. For us i are edges and n is the number of edges, and f_e =
@@ -97,9 +116,12 @@ if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex di
     best_beta_alg_1 = beta_range(mod(best_alg_1_ix-1,length(beta_range))+1);
     best_alf_alg_1 = alpha_range(floor((best_alg_1_ix-1)/length(beta_range))+1);
     
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_1, best_alg_1_ix, best_beta_alg_1 , best_alf_alg_1};
+
+    
 end
 
-if (Alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
+if (alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
     % note that this algorithm is built to minimize the average of (1/n)
     % sum_i f_i for some functions f_i, whose Conjugate Gradient we use
     % bellow. For us i are edges and n is the number of edges, and f_e =
@@ -130,9 +152,12 @@ if (Alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex di
     best_beta_alg_2 = beta_range(mod(best_alg_2_ix-1,length(beta_range))+1);
     best_alf_alg_2 = alpha_range(floor((best_alg_2_ix-1)/length(beta_range))+1);
             
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_2, best_alg_2_ix, best_beta_alg_2 , best_alf_alg_2};
+
+    
 end
 
-if (Alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks"
+if (alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks"
     % note that this algorithm is built to minimize the average of (1/n)
     % sum_i f_i for some functions f_i, whose Proximal Operator we use
     % bellow. The algorithm specifies that the proximal operator should be
@@ -163,9 +188,11 @@ if (Alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optim
     best_alg_3_ix = find(rate_evol == best_rate_alg_3);
     best_L_is_val_alg_3 = L_is_range(  best_alg_3_ix  );
     
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_3, best_alg_3_ix, best_L_is_val_alg_3};
+
 end
 
-if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
+if (alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
    
     X_init = randn(dim, numE, 1);
     U_init = randn(dim, numE, numE);
@@ -194,9 +221,12 @@ if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
     best_rho_alg_4 = rho_range(mod(best_alg_4_ix-1,length(rho_range))+1);
     best_alf_alg_4 = alpha_range(floor((best_alg_4_ix-1)/length(rho_range))+1);
 
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_4, best_alg_4_ix, best_rho_alg_4, best_alf_alg_4};
+
+    
 end
 
-if (Alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
+if (alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
    
     X_init = randn(dim,numE,1);
     U_init = randn(dim,numE,numE);
@@ -227,12 +257,14 @@ if (Alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = 
     best_alg_5_ix = find(rate_evol == best_rate_alg_5);
     best_rho_alg_5 = rho_range(mod(best_alg_5_ix-1,length(rho_range))+1);
     best_alf_alg_5 = alpha_range(floor((best_alg_5_ix-1)/length(rho_range))+1);
+
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_5, best_alg_5_ix, best_rho_alg_5, best_alf_alg_5};
     
     
 end
 
 
-if (Alg_name == 6) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
+if (alg_name == 6) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
 
     X_init = randn(dim,numE);
     U_init = randn(dim,numEline);
@@ -266,10 +298,13 @@ if (Alg_name == 6) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = 
     best_rho_alg_6 = rho_range(mod(best_alg_6_ix-1,length(rho_range))+1);
     best_alf_alg_6 = alpha_range(floor((best_alg_6_ix-1)/length(rho_range))+1);    
     
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_6, best_alg_6_ix, best_rho_alg_6, best_alf_alg_6};
+
+    
 end
 
 
-if (Alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
+if (alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
     
     X_init = randn(2,numE);
     Z_init = randn(dim,1);
@@ -300,8 +335,19 @@ if (Alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,
     best_alg_7_ix = find(rate_evol == best_rate_alg_7);
     best_rho_alg_7 = rho_range(mod(best_alg_7_ix-1,length(rho_range))+1);
     best_alf_alg_7 = alpha_range(floor((best_alg_7_ix-1)/length(rho_range))+1);  
-       
+    
+    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_7, best_alg_7_ix, best_rho_alg_7, best_alf_alg_7};
+
+    
 end
+
+    %list_of_best_rates = [best_rate_alg_0, best_alf_alg_0 , best_rate_alg_1 ,   best_beta_alg_1 ,  best_alf_alg_1, best_rate_alg_2 ,    best_beta_alg_2 , best_alf_alg_2 , best_rate_alg_3,best_L_is_val_alg_3,best_rate_alg_4,best_rho_alg_4,best_alf_alg_4,best_rate_alg_5,best_rho_alg_5,best_alf_alg_5,best_rate_alg_6,best_rho_alg_6,best_alf_alg_6,best_rate_alg_7,best_rho_alg_7,best_alf_alg_7];
+
+    all_rates_all_graphs{mem_ix}{1} = {G, W, delta, target};
+    
+    
+end % go over 7 algorithms
+end % go over 10 repetitions and go over different graph sizes
 
 function test_GradConjF()
     while(1)
