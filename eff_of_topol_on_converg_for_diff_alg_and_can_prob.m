@@ -11,12 +11,12 @@
 
 
 all_rates_all_graphs = cell(length( 5:5:40)*length(1:10),2,8);
-file_name_to_save_work_space = ['cann_prob_test_random_ER_graph_diff_size_rep_algs_created_on_' datestr(datetime)];
+file_name_to_save_work_space = ['./results/cann_prob/cann_prob_test_random_ER_graph_diff_size_rep_algs_created_on_' datestr(datetime)];
 
 %% set the parameters of our problem, the graph and the delta
 %global E1 E2 delta numE target
 
-
+parpool(25);
 parfor mem_ix = 1:80 % we use the outer for-loop to search over different graph sizes and repetitions for each graph size
 
 dim_count = 1 + mod(mem_ix - 1 ,length(5:5:40));
@@ -83,8 +83,7 @@ if (alg_name == 0) %Gradient descent
     best_alf_alg_0 = alf_range(rate_evol == best_rate_alg_0);
     
     all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_0, best_alf_alg_0};
-    save(file_name_to_save_work_space);
-    
+   
 end
 
 if (alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
@@ -117,7 +116,6 @@ if (alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex di
     best_alf_alg_1 = alpha_range(floor((best_alg_1_ix-1)/length(beta_range))+1);
     
     all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_1, best_alg_1_ix, best_beta_alg_1 , best_alf_alg_1};
-
     
 end
 
@@ -341,13 +339,16 @@ if (alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,
     
 end
 
-    %list_of_best_rates = [best_rate_alg_0, best_alf_alg_0 , best_rate_alg_1 ,   best_beta_alg_1 ,  best_alf_alg_1, best_rate_alg_2 ,    best_beta_alg_2 , best_alf_alg_2 , best_rate_alg_3,best_L_is_val_alg_3,best_rate_alg_4,best_rho_alg_4,best_alf_alg_4,best_rate_alg_5,best_rho_alg_5,best_alf_alg_5,best_rate_alg_6,best_rho_alg_6,best_alf_alg_6,best_rate_alg_7,best_rho_alg_7,best_alf_alg_7];
-
+    
     all_rates_all_graphs{mem_ix}{1} = {G, W, delta, target};
-    
-    
+    % need to use special file to save within parfor loop
+    parsave([file_name_to_save_work_space,'_tmpID_',num2str(mem_ix)],all_rates_all_graphs{mem_ix});
+
 end % go over 7 algorithms
 end % go over 10 repetitions and go over different graph sizes
+
+save(file_name_to_save_work_space);
+
 
 function test_GradConjF()
     while(1)
