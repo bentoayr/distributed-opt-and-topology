@@ -1,5 +1,9 @@
+%% this code solves the problem  0.5*(delta)*(1/numV)\sum_{i \in V} |x_i - target|^2   +  (1/ |E|) sum_{(i,j) \in E} | | x_i - x_j|^p  - d^p_ij  |^q
+% for some graph G = (V, E) and for different values of q and p. Each x_i is associated with a node i and has dimension dim
+% target is a vector/matrix with all entries equal to "target"
+
 % random graph
-numV = 30;
+numV = 10;
 G = rand(numV) > 0.5;
 G = graph(triu(G,1) + triu(G,1)'); % undirected random E-R graph. This is not a matrix. It is a graph object.
 
@@ -26,8 +30,6 @@ numEline = line_G.numedges;
 
 dim = 2;
 
-
-
 D = ones(numV);%rand(numV); % matrix of random distances. Note that only the distances corresponding to pairs that are edges matter. The rest does not matter.
 D = (D + D')/2; % This is not really necessary, but makes D more interpertable
 
@@ -36,6 +38,8 @@ target = 1; % this pushes all of the points to the (1,1,1,1,1,1....,1) region of
 
 p = 2;
 q = 2;
+
+num_iter = 10000;
 
 evol = [];
 
@@ -78,121 +82,95 @@ eps = 4*R*L_l/num_iter; % %note that there is a typo in the arxiv paper "Optimal
 W_Acc = AccGoss(eye(numE), W, K,c2,c3);
 
 
-num_iter = 10000;
 
-Alg_name = 0;
+Alg_name = 3;
 
 if (Alg_name == 0)
     
-    X = randn(dim,numV);
+    X_init = randn(dim,numV);
     alp = 0.1;
+    num_iter = 10000;
     
-    for t = 1:num_iter
-        for i = 1:numV
-            X(:,i) = X(:,i) - alp* GradF(X, i , Adj_G ,D,numE);
-        end
-        
-        err =  log(compute_objective(X,D,p,q,E1,E2));
-
-        %evol = [evol, err ];
-        %plot([1:1:t*1],evol'); 
-        scatter(X(1,:)',X(2,:)'); % we can vizualize the position of the points
-        drawnow;
-        
+    [evol_obj, evol_X] = grad_desc_non_conv_prob(X_init, alp, @compute_objective,@GradF,num_iter, Adj_G, D, numE ,E1,E2, delta, target);
+    
+    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+    rate_X = estimate_rate_out_of_X_evol(evol_X);
+    disp([rate_obj, rate_X]);
+    
+    subplot(1,2,1);
+    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
+    
+    for r = 1:100
+        hold on;
+        subplot(1,2,2);
+        scatter(evol_X(1,:,r)',evol_X(2,:,r)','.'); % vizualize the position of the points
+        hold off;
     end
-
+    
 end
-
-
 
 % there is some problem with the convergence of this algorithm for the non
 % convex problem
 if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
     %delta = 100;
-    eta_1 = 0.001&eta_1;
-    mu_1  = 0.5*mu_1;
-    for t = 1:num_iter
-        for e = 1:numE 
-            i = E1(e); j = E2(e); d = D(i,j);
-            Theta(:,:,e) = GradConjF( X(:,:,e), e, d, numE, delta/numV , E1, E2); % we rescale delta by numV so that the two terms in our objective have more or less the same size regardless of the size of the graph that we are deadling with        
-        end
-        Y_old = Y;
-        
-        % this could be done more efficiently
-        % notice that reshaping operations take almost no time
-        Theta = reshape(Theta, dim*numV, numE);
-        ThetaW = Theta*W;
-        ThetaW = reshape(ThetaW, dim, numV, numE);
-        Theta = reshape(Theta,dim,numV,numE);
-        
-        Y = X - eta_1*ThetaW;
-        X = (1 + 0.5*mu_1)*Y - mu_1*Y_old;
-        
-        err =  log(compute_objective(X(:,:,1),D,p,q,E1,E2));
-        
-        evol = [evol, err ];
-        plot([1:1:t*1], evol'); 
-        %scatter(X(1,:,1)',X(2,:,1)'); % we can vizualize the position of the points
+    %eta_1 = 0.001*eta_1;
+    %mu_1  = 0.5*mu_1;
+    
+    alpha = 0.001;%*delta;
+    beta  = 0.1;%*(4 + delta); 
+    
+    %delta = 10;
+    
+    Y_init = rand(dim*numV, numE);
+    Theta_init = rand(dim,numV,1);
+    
+    num_iter = 1000;
+   
+    [evol_obj, evol_AveX] = alg_1_Scaman_17_non_conv(Y_init, Theta_init , @GradConjF, @compute_objective, num_iter, numE , D, Lap_line_G, delta, E1,E2,target,alpha, beta);
 
-        drawnow;
-        
+    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+    disp([rate_obj, rate_X]);
+
+    
+    subplot(1,2,1);
+    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
+    
+    for r = 1:100
+        hold on;
+        subplot(1,2,2);
+        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
+        hold off;
     end
+    
 end
 
 if (Alg_name == 3)
-  
-       
-    if (norm(full(W_Acc),2)*sigma*eta_3 > 1)
-        disp(['Convergene condition not met because ', num2str(norm(full(W_Acc),2)*sigma*eta_3), ' is bigger than 1']);
-        %return;
+
+    L_is = 1*(2 + delta)*ones(numE , 1);
+    R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
+    fixing_factor = 3; %this does not seem to make a big difference.
+    num_iter = 1000;
+    
+    Y_init = rand(dim*numV, numE);
+    Theta_init = rand(dim,numV,1);
+    
+    [evol_obj, K, evol_AveX] = alg_2_Scaman_18_non_conv(Y_init, Theta_init , p,q, @ProxF, @AccGoss, @compute_objective, num_iter, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor);
+    
+    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+    disp([rate_obj, rate_X]);
+    
+    subplot(1,2,1);
+    plot([1:K:num_iter*K],evol_obj'); % vizualize the evolution of the error
+    
+    for r = 1:100
+        hold on;
+        subplot(1,2,2);
+        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
+        hold off;
     end
-       
-    
-    for t = 1:num_iter
 
-        % reshape Theta and Theta_old
-        Theta = reshape(Theta, dim*numV, numE);
-        Theta_old = reshape(Theta_old, dim*numV, numE);
-        
-        % appy distributed averaging operator
-        ThetaW = AccGoss(2*Theta - Theta_old, W, K,c2,c3);
-        % reshape result
-        ThetaW = reshape(ThetaW, dim,numV, numE);
-        
-        % update dual
-        Y = Y - sigma*ThetaW;
-
-        % reshape back
-        Theta = reshape(Theta, dim,numV, numE);
-        Theta_old = reshape(Theta_old, dim,numV, numE);
-        
-        
-        Theta_old = Theta;
-        Theta_tilde = Theta;
-        for e = 1:numE
-
-            Theta_tilde(:,:,e) = ProxF(p,q, eta_3*Y(:,:,e) + Theta(:,:,e) , 1/eta_3,D,e, E1, E2 );
-            
-            %ProxF(p,q,N,rho,D,e,E1,E2)
-
-
-        end
-        Theta = Theta_tilde;
-        
-        sum_Theta = sum_Theta + sum(Theta,3)/numE; % the paper asks to compute the average in space and time
-        
-        err =  log(compute_objective(sum_Theta,D,p,q,E1,E2));
-        
-        %evol = [evol, err ];
-        %plot([1:1:t*1],evol'); 
-        scatter(sum_Theta(1,:)',sum_Theta(2,:)'); % we can vizualize the position of the points
-
-        drawnow;
-        
-        
-    end
-    
-    
 end
 
 if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
@@ -435,6 +413,7 @@ function test_GradF_and_Conj_Grad_F()
     while (1)
         numE = 10;
         delta = rand;
+        target = rand;
         d = rand;
         dim = 3;
         numV = 5;
@@ -444,13 +423,13 @@ function test_GradF_and_Conj_Grad_F()
         E2 = 5;
         e = 1;
 
-        Y = GradConjF(X,e,d,numE,delta,E1,E2);
+        Y = GradConjF(X,e,d,numV,delta,target,E1,E2);
         
-        YY = GradFPair(Y,e,d,numE,delta,E1,E2);
+        YY = GradFPair(Y,e,d,numV,delta,target,E1,E2);
 
         disp(norm(YY-X));
         
-        if (  norm(YY-X)   > 10^-5)
+        if (  norm(YY-X)   > 10^(-4))
             1 == 1;
         end
         
@@ -460,67 +439,77 @@ end
 
 
 
-function obj = compute_objective(X,D,p,q,E1,E2)
+function obj = compute_objective(X,D,p,q,E1,E2,delta,target)
     numE = length(E1);
+    numV = size(X,2);
     obj = 0;
     for e = 1:numE
         i = E1(e); j = E2(e);
         d = D(i,j);
         xi = X(:,i);
         xj = X(:,j);
-        obj = obj + abs(norm(xi - xj)^p - d^p)^q;
+        obj = obj + (1/numE)*abs(norm(xi - xj)^p - d^p)^q;
     end
-    obj = obj / numE;
+    obj = obj + (1/numV)*delta*(norm(X - target,'fro')^2);
 end
 
 % this is the gradient with respect to variable xi of the objective
-% (1/numE) sum_(i,j)  | |xi - xj|^p  - d^p |^q 
-function GradF = GradF(X, i , Adj_G, D,numE)
-    GradF = 0;
+% ((1/numE) sum_(i,j)  | |xi - xj|^2  - d_{i,j}^2 |^2) +  0.5*(delta/numV)*|X - target|^2)
+function GradF = GradF(X, i , Adj_G, D,numE, delta,target,numV)
     xi = X(:,i);
+    GradF = (delta/numV)*(xi - target);
+    
     Neig_i = find(Adj_G(i,:));
     for j = Neig_i
         d = D(i,j);
         xj = X(:,j);
-        GradF = GradF + 4*(norm(xi - xj)^2 - d^2)*(xi - xj);
+        GradF = GradF + (1/numE)*4*(norm(xi - xj)^2 - d^2)*(xi - xj);
     end
-    GradF = GradF/numE;
+    
 end
 
 % this is the gradient with respect to variable xi of the objective
-% (1/numE) * (| |xi - xj|^p  - d^p |^q + 0.5*delta*|X|^2)
-function GradFPair = GradFPair(X,e,d,numE,delta,E1,E2)
-    
-    delta = delta/numE; % we have this here because the (1/E) is multiplying delta in the objective of our PO
-    
-    % the code below computes the conjugate function (1/E)( |xi - xj|^2 - d^2)^2) + 0.5*delta*|X|^2 
-    % where the (1/E) does not multiply delta.
+% (| |xi - xj|^p  - d^p |^q + 0.5*(delta/numV)*|X - target|^2)
+% notice that the optimization aolgorithms that we are using are minimizing
+% the average of functions (that decompose the objective). Therefore, here
+% we do not need to use the (1/numE) in the functions
+function GradFPair = GradFPair(X,e,d,numV,delta,target, E1,E2)
 
-    GradFPair = delta*X;
+    delta = delta/numV;
+
+    GradFPair = delta*(X - target);
     
     i = E1(e); j = E2(e);
     
     xi = X(:,i);
     xj = X(:,j);
     
-    GradFPair(:,i) = GradFPair(:,i) + (1/numE)*4*(norm(xi - xj)^2 - d^2)*(xi - xj);
-    GradFPair(:,j) = GradFPair(:,j) + (1/numE)*4*(norm(xi - xj)^2 - d^2)*(xj - xi);
+    GradFPair(:,i) = GradFPair(:,i) + 4*(norm(xi - xj)^2 - d^2)*(xi - xj);
+    GradFPair(:,j) = GradFPair(:,j) + 4*(norm(xi - xj)^2 - d^2)*(xj - xi);
 end
 
 
-% computes the gradient of the conjugate function (1/E)( |xi - xj|^2 - d^2)^2 + 0.5*delta*|X|^2 )
+% computes the gradient of the conjugate function  |xi - xj|^2 - d^2)^2 + 0.5*(delta/numV)*|X - target|^2 
+% notice that the algorithms that use the conjugate gradient are minimizing
+% average of functions
 % the conjugate gradient is basically minimizing <X,Y> - f(X) where f(X) is the function above
-function GradConjF = GradConjF(Y,e,d,numE,delta,E1,E2)
+% notice again that we do not need to divide the objective by (1/numE)
+% since the optimization algorithms that use these functions already assume
+% that the objecgive is an AVERAGE of functions
+function GradConjF = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
 
-    delta = delta/numE; % we have this here because the (1/E) is multiplying delta in the objective of our PO
+    numE = 1; % we do no need to use this, but the code we wrote was initially generic, so we put numE = 1 here.
+    delta = delta/numV; 
     
-    % the code below computes the conjugate function (1/E)( |xi - xj|^2 - d^2)^2) + 0.5*delta*|X|^2 
-    % where the (1/E) does not multiply delta.
+    % the code below computes the conjugate function (1/E)( |xi - xj|^2 - d^2)^2) + 0.5*delta*|X - target|^2 
+    % where the (1/E) does not multiply delta, and was wet to 1 above
     
-    GradConjF = Y/delta;
+    GradConjF = target + (Y/delta);
 
+    %return;
+    
     i = E1(e); j = E2(e);
-    xipxj = (1/delta)*(Y(:,i) + Y(:,j));
+    xipxj = (1/delta)*(Y(:,i) + Y(:,j)) + 2*target;
 
     tmp = zeros(6,1);
     
@@ -556,19 +545,18 @@ function GradConjF = GradConjF(Y,e,d,numE,delta,E1,E2)
         GradConjF(:,i) = (ximxj + xipxj)/2;
         GradConjF(:,j) = (-ximxj + xipxj)/2;
         
-        if (norm(GradFPair(GradConjF,e,d,numE,delta*numE,E1,E2) - Y) < 10^(-5))
+        if (norm(GradFPair(GradConjF,e,d,numV,delta,target,E1,E2) - Y) < 10^(-5))
             break;
         end
     end
 
-    
-    
 end
 
 
-% this is the proximal operator min_xi xj  | |xi - xj|^p  - d^p |^q + 0.5*rho*(X - N)^2
+% this is the proximal operator min_X  | |xi - xj|^p  - d^p |^q  + 0.5*rho*|X - N|^2
+% note that this is a PO for the whole set of vectors {x_i}
 function [x_opt] = ProxF(p,q,N,rho,D,e,E1,E2)
-
+    
     x_opt = N; % most components will not change. But the components corresponding to the edge being processed change
     i = E1(e); j = E2(e);
     d = D(i,j);
@@ -725,7 +713,7 @@ end
 
 function [Y] = AccGoss(X, W, k, c2, c3)
 
-    I = eye(length(X));
+    I = eye(size(X,2));
     a_old = 1;
     a = c2;
     x_0 = X;

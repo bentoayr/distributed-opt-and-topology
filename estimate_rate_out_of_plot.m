@@ -8,6 +8,4 @@ function rate = estimate_rate_out_of_plot(evol)
     
     rate = mvm(ix);
 
-
-
 end

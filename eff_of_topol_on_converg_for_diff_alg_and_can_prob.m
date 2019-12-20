@@ -451,7 +451,7 @@ end
 
 function [Y] = AccGoss(X, W, k, c2, c3)
 
-    I = eye(length(X));
+    I = eye(size(X,2));
     a_old = 1;
     a = c2;
     x_0 = X;
