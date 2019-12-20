@@ -22,8 +22,12 @@ function [evol, evol_X] = grad_desc_non_conv_prob(X_init, alf, compute_objective
         if (num_iter - t < 100)
            evol_X(:,:,100 - (num_iter - t)) = X; 
         end
+    
+        %scatter(X(1,:)',X(2,:)')
+        %drawnow;
         
     end
+    
     
 end
 

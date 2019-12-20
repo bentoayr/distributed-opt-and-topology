@@ -39,57 +39,18 @@ target = 1; % this pushes all of the points to the (1,1,1,1,1,1....,1) region of
 p = 2;
 q = 2;
 
-num_iter = 10000;
 
-evol = [];
+%% run the different algorithms
+% at this point Alg_1 and Alg_2, based on using conjugate gradient descent
+% are not working, they are unstable
 
-%% set some parameters to be used in algorithm 1, 2 and 3 from Scaman et al. 2017 and 2018
-Y = rand(dim*numV, numE)*real(sqrtm(full(W)));
-Y = reshape(Y,dim,numV, numE);
-X = Y;
-
-Theta = repmat(rand(dim,numV,1),1,1,numE);
-Theta_old = Theta;
-
-alpha = delta/numV;
-beta  = 4 + delta/numV; % the objective function as we are trying to solve does not have Lipshitz gradients
-
-% the choice of the following values is according to Scaman et al. 2017, "Optimal algorithms for smooth and strongly convexdistributed optimization in networks"
-kappa_l = beta / alpha; 
-specW = sort(eig(W)); 
-eta_1 = alpha/specW(end); 
-gamma = specW(2)/specW(end);
-mu_1 = (sqrt(kappa_l) - sqrt(gamma)) / (sqrt(kappa_l) + sqrt(gamma));
-c1 = (1 - sqrt(gamma))/ (1 + sqrt(gamma));
-c2 = (1 + gamma) / (1 - gamma);
-c3 = 2/ ((1+gamma)*specW(end));
-K = floor(1 / sqrt(gamma));
-eta_2 = alpha*(1 + c1^(2*K))/((1 + c1^K)^2);
-mu_2 = ((1 + c1^K)*sqrt(kappa_l) - 1 + c1^K) / ((1 + c1^K)*sqrt(kappa_l) + 1 - c1^K);
-
-R = 1; 
-L_is = (2 + delta)*ones(numE , 1);
-L_l = norm(L_is,2)/sqrt(numE);
-
-fixing_factor = 3;
-
-eta_3  = ((1 - c1^K)/(1 + c1^K))*(numE*R/L_l);
-sigma = (1/fixing_factor)*(1/eta_3)*(1 + c1^(2*K))/((1 - c1^K)^2); %note that there is a typo in the arxiv paper "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks" in the specificaion of the Alg 2. In the definition of sigma, tau should be eta
-sum_Theta = 0;
-
-M = num_iter;
-eps = 4*R*L_l/num_iter; % %note that there is a typo in the arxiv paper "Optimal Algorithms for Non-Smooth Distributed Optimization in Networks" in the specificaion of the Alg 2. In the definition of T. It should be T = 4 R L_l / eps
-W_Acc = AccGoss(eye(numE), W, K,c2,c3);
-
-
-
-Alg_name = 3;
+Alg_name = 0;
 
 if (Alg_name == 0)
     
     X_init = randn(dim,numV);
     alp = 0.1;
-    num_iter = 10000;
+    num_iter = 1000;
     
     [evol_obj, evol_X] = grad_desc_non_conv_prob(X_init, alp, @compute_objective,@GradF,num_iter, Adj_G, D, numE ,E1,E2, delta, target);
     
@@ -175,194 +136,114 @@ end
 
 if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
    
-    X = randn(dim,numV,numE,1);
-    XAve = zeros(dim,numV,numE,1);
-    U = randn(dim,numV,numE,numE);
-    U_old = U;
+    X_init = randn(dim , numV , numE , 1);
+    U_init = randn(dim,numV,numE,numE);
+    
     rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 0.1;
     
-    for t = 1:num_iter
-        X_old = X;
-        U_old = U;
-
-        for e = 1:numE
-            Neig_e = find(Adj_line_G(e,:));
-            
-            N = mean(  X_old(:,:,Neig_e,1) - U_old(:,:,Neig_e,e) , 3);
-            % because of the way the PO was coded, we need to correct the
-            % value of N
-            N = (rho*numE*length(Neig_e)*N + delta*target/numV)/(rho*numE*length(Neig_e) + delta/numV);
-            
-            
-            % because of the way the PO was coded, we need to correct the
-            % value of rho
-            X(:,:,e,1) =   ProxF( p,q,  N    , rho*numE*length(Neig_e) + delta/numV , D, e ,E1, E2  );     
-        end
-        
-        for e = 1:numE
-            Neig_e = find(Adj_line_G(e,:));
-            U(:,:,e, Neig_e) = U(:,:,e, Neig_e) + alp*(- U(:,:,e, Neig_e) + permute( -U_old(:,:,Neig_e,e) - repmat(X(:,:,e,1),1,1,length(Neig_e),1) +  X_old(:, :,Neig_e,1 ), [1, 2, 4, 3]));
-        end
-        
-        XAve = XAve + X; % the paper asks to compute the average in space
-        
-        err =  log(compute_objective(X(:,:,1,1),D,p,q,E1,E2));
-        
-        %evol = [evol, err ];
-        %plot([1:1:t*1],evol'); 
-        scatter(X(1,:,1,1)',X(2,:,1,1)'); % we can vizualize the position of the points
-
-        drawnow;
-    end
+    num_iter = 1000;
     
+    [evol_obj, evol_AveX] = PDMM_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
+    
+    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+    disp([rate_obj, rate_X]);
+    
+    subplot(1,2,1);
+    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
+    
+    for r = 1:100
+        hold on;
+        subplot(1,2,2);
+        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
+        hold off;
+    end
+
 end
 
 if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
 
-    X = randn(dim,numV,numE,1);
-    U = randn(dim,numV,numE,numE);
-    U_old = U;
+    X_init = randn(dim,numV,numE,1);
+    U_init = randn(dim,numV,numE,numE);
     
-    rho = 0.01; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 0.1;
-    for t = 1:num_iter
-        
-        X_old = X;
-        U_old = U;
 
-        for e = 1:numE
-            Neig_e = find(Adj_line_G(e,:));  
-            
-            N = mean( -permute(U(:,:,e,Neig_e),[1,2,4,3])  + 0.5*(X_old(:,:,Neig_e,1) + U_old(:,:,Neig_e,e) + permute(U_old(:,:,e,Neig_e),[1,2,4,3]) + repmat(X_old(:,:,e,1),1,1,length(Neig_e),1)) , 3);
-            % because of the way the PO was coded, we need to correct the
-            % value of N
-            N = (rho*numE*length(Neig_e)*N + delta*target/numV)/(rho*numE*length(Neig_e) + delta/numV);
-            
-            % because of the way the PO was coded, we need to correct the
-            % value of rho
-            X(:,:,e,1) =   ProxF( p,q, N ,  rho*numE*length(Neig_e) + delta/numV    ,  D, e ,E1, E2  );     
-        end
-        
-        for e = 1:numE
-            Neig_e = find(Adj_line_G(e,:));
-            U(:,:,e, Neig_e) = U_old(:,:,e, Neig_e) + alp*(0.5*(    -U_old(:,:,e, Neig_e)  + permute( -X(:,:,Neig_e,1)    -U_old(:,:,Neig_e,e) + repmat(X(:,:,e,1),1,1,length(Neig_e),1) , [1,2, 4, 3])    ));
-        end
-                
-        
-        err =  log(compute_objective(X(:,:,1,1),D,p,q,E1,E2));
-        
-        %evol = [evol, err ];
-        %plot([1:1:t*1],evol'); 
-        scatter(X(1,:,1,1)',X(2,:,1,1)'); % we can vizualize the position of the points
+    num_iter = 1000;
+    
+    [evol_obj, evol_AveX] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
 
-        drawnow;
+    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+    disp([rate_obj, rate_X]);
+    
+    subplot(1,2,1);
+    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
+    
+    for r = 1:100
+        hold on;
+        subplot(1,2,2);
+        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
+        hold off;
     end
+
 end
 
 
 if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
 
-    X = randn(dim,numV,numE);
-    U = randn(dim,numV,numEline);
-    U_old = U;
+    X_init = randn(dim, numV, numE);
+    U_init = randn(dim, numV, numEline);
     
-    rho = 0.01; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 0.1;
     
-    for t = 1:num_iter
-        
-        X_old = X;
-        U_old = U;
-        
-        for e = 1:numE
-            Neig_e = find(Adj_line_G(e,:));
-            Neig_e_ix = find(E1line == e | E2line == e);
-            S = zeros(1,1,length(Neig_e_ix));
-            S(1,1,:) = sign(Neig_e - e);
-            
-            N = mean(  X_old(:,:,Neig_e) - U(:,:,Neig_e_ix).*repmat(S,dim,numV,1) , 3);
-            % because of the way the PO was coded, we need to correct the
-            % value of N
-            N = (rho*numE*length(Neig_e)*N + delta*target/numV)/(rho*numE*length(Neig_e) + delta/numV);
-            
-            % because of the way the PO was coded, we need to correct the
-            % value of rho
-            X(:,:,e) =  ProxF( p,q, N ,  rho*numE*length(Neig_e) + delta/numV  ,  D, e ,E1, E2  );     
-
-        end
-        
-        for linee = 1:numEline
-            e1 = E1line(linee);
-            e2 = E2line(linee);
-            
-            U(:,:,linee) = U_old(:,:,linee) + alp*( X(:,:,e1) - X(:,:,e2) );
-        end
-        
-        %err =  log(compute_objective(X(:,:,1),D,p,q,E1,E2));
-        %evol = [evol, err ];
-        %plot([1:1:t*1],evol');
-        
-        scatter(X(1,:,1)',X(2,:,1)'); % we can vizualize the position of the points
-        drawnow;
+    num_iter = 1000;
+    
+    [evol_obj, evol_AveX] = ADMM_edge_edge_no_Z_non_conv(p,q,X_init, U_init, rho, alp, numE, numEline, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, E1line,E2line,delta, target);
+    
+    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+    disp([rate_obj, rate_X]);
+    
+    subplot(1,2,1);
+    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
+    
+    for r = 1:100
+        hold on;
+        subplot(1,2,2);
+        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
+        hold off;
     end
 
 end
 
 if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
 
-    X = randn(dim,2,numE);
-    Z = randn(dim,numV);
-    U = randn(dim,2,numE); 
+    X_init = randn(dim,2,numE);
+    Z_init = randn(dim,numV);
+    U_init = randn(dim,2,numE); 
     
-    U_old = U;
-    rho = 0.01; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
+    rho = 1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 0.1;
     
-    for t = 1:num_iter
-
-        for e = 1:numE
-            
-            i = E1(e); j = E2(e);
-            invdegi = 1/length(find(Adj_G(i,:)));
-            invdegj = 1/length(find(Adj_G(j,:)));
-            
-            % because of the way the PO was coded, we need to correct the
-            % value of rho1 and rho2
-            rho1 = rho + (delta*invdegi)/numV;
-            rho2 = rho + (delta*invdegj)/numV;
-            
-            N1 = Z(:,i) - U(:,1,e);
-            N2 = Z(:,j) - U(:,2,e);
-            
-            % because of the way the PO was coded, we need to correct the
-            % value of N1 and N2
-            N1 = (rho*N1 + target*((delta*invdegi)/numV))/rho1;
-            N2 = (rho*N2 + target*((delta*invdegj)/numV))/rho2;
-            
-            
-            [X1,X2] =  ProxFPair(p,q, N1 , N2  , rho1*numE, rho2*numE , D(i,j) );                
-            X(:,1,e) = X1; X(:,2,e) = X2;
-        end
-        
-        for i = 1:numV
-            e1Neigh = find(E1 == i);
-            e2Neigh = find(E2 == i);            
-            Z(:,i) = (sum(X(:,1,e1Neigh) + U(:,1,e1Neigh),3) + sum(X(:,2,e2Neigh) + U(:,2,e2Neigh),3)) / (length(e1Neigh) + length(e2Neigh));
-        end
-        
-        for e = 1:numE
-            i = E1(e); j = E2(e);
-            U(:,1, e) = U(:,1, e) + alp*( X(:,1,e)  - Z(:,i)  ); 
-            U(:,2, e) = U(:,2, e) + alp*( X(:,2,e)  - Z(:,j)  ); 
-        end
-        
-        err =  log(compute_objective(Z,D,p,q,E1,E2));
-        
-        %evol = [evol, err ];
-        %plot([1:1:t*1],evol'); 
-        scatter(Z(1,:)',Z(2,:)'); % we can vizualize the position of the points
-        drawnow;
+    num_iter = 1000;
+    
+    [evol_obj, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
+    
+    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+    rate_Z = estimate_rate_out_of_X_evol(evol_Z);
+    disp([rate_obj, rate_Z]);
+    
+    subplot(1,2,1);
+    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
+    
+    for r = 1:100
+        hold on;
+        subplot(1,2,2);
+        scatter(evol_Z(1,:,r)',evol_Z(2,:,r)','.'); % vizualize the position of the points
+        hold off;
     end
     
 end
