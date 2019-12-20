@@ -10,7 +10,7 @@
 %% define the variable where everything will be stored
 
 
-all_rates_all_graphs = cell(length( 5:5:40)*length(1:10),2,8);
+all_rates_all_graphs =cell(length( 5:5:40)*length(1:10),2,8);
 file_name_to_save_work_space = ['./results/cann_prob/cann_prob_test_random_ER_graph_diff_size_rep_algs_created_on_' datestr(datetime)];
 
 %% set the parameters of our problem, the graph and the delta

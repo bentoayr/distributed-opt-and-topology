@@ -592,7 +592,7 @@ function x_opt = one_dim_prob(p,q,N,rho)
     end
 end
 
-function [Y] = AccGoss(X, W, k, c2, c3)
+function [Y]= AccGoss(X, W, k, c2, c3)
 
     I = eye(size(X,2));
     a_old = 1;
