@@ -480,15 +480,15 @@ end
 
 % this is the gradient with respect to variable xi of the objective
 % ((1/numE) sum_(i,j)  | |xi - xj|^2  - d_{i,j}^2 |^2) +  0.5*(delta/numV)*|X - target|^2)
-function GradF = GradF(X, i , Adj_G, D,numE, delta,target,numV)
+function GradFout = GradF(X, i , Adj_G, D,numE, delta,target,numV)
     xi = X(:,i);
-    GradF = (delta/numV)*(xi - target);
+    GradFout = (delta/numV)*(xi - target);
     
     Neig_i = find(Adj_G(i,:));
     for j = Neig_i
         d = D(i,j);
         xj = X(:,j);
-        GradF = GradF + (1/numE)*4*(norm(xi - xj)^2 - d^2)*(xi - xj);
+        GradFout = GradFout + (1/numE)*4*(norm(xi - xj)^2 - d^2)*(xi - xj);
     end
     
 end
@@ -498,19 +498,19 @@ end
 % notice that the optimization aolgorithms that we are using are minimizing
 % the average of functions (that decompose the objective). Therefore, here
 % we do not need to use the (1/numE) in the functions
-function GradFPair = GradFPair(X,e,d,numV,delta,target, E1,E2)
+function GradFPairout = GradFPair(X,e,d,numV,delta,target, E1,E2)
 
     delta = delta/numV;
 
-    GradFPair = delta*(X - target);
+    GradFPairout = delta*(X - target);
     
     i = E1(e); j = E2(e);
     
     xi = X(:,i);
     xj = X(:,j);
     
-    GradFPair(:,i) = GradFPair(:,i) + 4*(norm(xi - xj)^2 - d^2)*(xi - xj);
-    GradFPair(:,j) = GradFPair(:,j) + 4*(norm(xi - xj)^2 - d^2)*(xj - xi);
+    GradFPairout(:,i) = GradFPairout(:,i) + 4*(norm(xi - xj)^2 - d^2)*(xi - xj);
+    GradFPairout(:,j) = GradFPairout(:,j) + 4*(norm(xi - xj)^2 - d^2)*(xj - xi);
 end
 
 
@@ -521,7 +521,7 @@ end
 % notice again that we do not need to divide the objective by (1/numE)
 % since the optimization algorithms that use these functions already assume
 % that the objecgive is an AVERAGE of functions
-function GradConjF = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
+function GradConjFout = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
 
     numE = 1; % we do no need to use this, but the code we wrote was initially generic, so we put numE = 1 here.
     delta = delta/numV; 
@@ -529,7 +529,7 @@ function GradConjF = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
     % the code below computes the conjugate function (1/E)( |xi - xj|^2 - d^2)^2) + 0.5*delta*|X - target|^2 
     % where the (1/E) does not multiply delta, and was wet to 1 above
     
-    GradConjF = target + (Y/delta);
+    GradConjFout = target + (Y/delta);
 
     %return;
     
@@ -567,10 +567,10 @@ function GradConjF = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
     for normximxj = real(tmp(pos_ix))'
     
         ximxj = (-1/c)*(Y(:,i) - Y(:,j))*sign(normximxj^2 - d^2 + delta*numE/8)*normximxj;
-        GradConjF(:,i) = (ximxj + xipxj)/2;
-        GradConjF(:,j) = (-ximxj + xipxj)/2;
+        GradConjFout(:,i) = (ximxj + xipxj)/2;
+        GradConjFout(:,j) = (-ximxj + xipxj)/2;
         
-        if (norm(GradFPair(GradConjF,e,d,numV,delta,target,E1,E2) - Y) < 10^(-5))
+        if (norm(GradFPair(GradConjFout,e,d,numV,delta,target,E1,E2) - Y) < 10^(-5))
             break;
         end
     end
