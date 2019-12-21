@@ -44,7 +44,7 @@ q = 2;
 % at this point Alg_1 and Alg_2, based on using conjugate gradient descent
 % are not working, they are unstable
 
-if (Alg_name == 0)
+if (alg_name == 0)
     
     rng(1);
     X_init = 1+0.01*randn(dim,numV);
@@ -90,7 +90,7 @@ end
 
 % there is some problem with the convergence of this algorithm for the non
 % convex problem
-if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
+if (alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
     %delta = 100;
     %eta_1 = 0.001*eta_1;
     %mu_1  = 0.5*mu_1;
@@ -125,11 +125,11 @@ if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex di
     
 end
 
-if (Alg_name == 2)
+if (alg_name == 2)
     
 end
 
-if (Alg_name == 3)
+if (alg_name == 3)
 
     rng(1);
     Y_init = 1+0.01*randn(dim*numV, numE);
@@ -180,7 +180,7 @@ if (Alg_name == 3)
 
 end
 
-if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
+if (alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
     
     rng(1);
     X_init = 1+0.01*randn(dim , numV , numE , 1);
@@ -231,7 +231,7 @@ if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
 
 end
 
-if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
+if (alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
 
     rng(1);
     X_init = 1+0.01*randn(dim,numV,numE,1);
@@ -283,7 +283,7 @@ if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
 
 end
 
-if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
+if (alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
 
     rng(1);
     X_init = 1 + 0.01*randn(dim, numV, numE);
@@ -334,7 +334,7 @@ if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
 
 end
 
-if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
+if (alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
 
     X_init = 1 + 0.01*randn(dim,2,numE);
     Z_init = 1 + 0.01*randn(dim,numV);
