@@ -3,33 +3,31 @@
 % target is a vector/matrix with all entries equal to "target"
 
 % random graph
-numV = 10;
-G = rand(numV) > 0.5;
-G = graph(triu(G,1) + triu(G,1)'); % undirected random E-R graph. This is not a matrix. It is a graph object.
+
+numV_range = 5:5:40;
+type_range = 1:7;
+verbose = 0;
+
+parpool(25);
+parfor mem_ix = 1:length(numV_range)*length(type_range) % we use the outer for-loop to search over different graph sizes and repetitions for each graph size
+
+numV_count = 1 + mod(mem_ix - 1 ,length(numV_range));
+numV = numV_count*5;
+graph_type_count =  1 + floor((mem_ix - 1) / length(numV_range));
+graph_type = graph_type_count;
 
 
-Adj_G = adjacency(G);
-Lap_G = laplacian(G);
-Inc_G = abs(incidence(G)); % it seems like Matlab orders edges based on the "lexicographical" indices. So edge (1,2) comes before edge (2,3). Also, there is no edge (2,1) in G. Also, it seems like the incidence matlab function puts signs on the elements, even for undirected graphs. that is why we use the abs() outside of it.
-Adj_line_G = Inc_G'*Inc_G - 2*eye(G.numedges); % the relation between the line graph and the incidence matrix is well known. see e.g. https://en.wikipedia.org/wiki/Incidence_matrix#Undirected_and_directed_graphs
+[numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line ] = generate_graph_data(numV, graph_type);
 
-line_G = graph(Adj_line_G);
-Lap_line_G = laplacian(line_G);
 
-E1 = G.Edges.EndNodes(:,1);
-E2 = G.Edges.EndNodes(:,2);
-E1line = line_G.Edges.EndNodes(:,1);
-E2line = line_G.Edges.EndNodes(:,2);
+all_rates_all_graphs{mem_ix}{1} = {numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line };
 
-% we make a simple choice for the Gossip matrix, it being equal to the Laplacian of our line graph
-W = Lap_line_G;
 
-numE = G.numedges;
-numEline = line_G.numedges;
+for alg_name = 1:7
+
 
 
 dim = 2;
-
 D = ones(numV);%rand(numV); % matrix of random distances. Note that only the distances corresponding to pairs that are edges matter. The rest does not matter.
 D = (D + D')/2; % This is not really necessary, but makes D more interpertable
 
@@ -39,35 +37,52 @@ target = 1; % this pushes all of the points to the (1,1,1,1,1,1....,1) region of
 p = 2;
 q = 2;
 
-
 %% run the different algorithms
 % at this point Alg_1 and Alg_2, based on using conjugate gradient descent
 % are not working, they are unstable
 
-Alg_name = 0;
-
 if (Alg_name == 0)
     
-    X_init = randn(dim,numV);
-    alp = 0.1;
+    rng(1);
+    X_init = 1+0.01*randn(dim,numV);
     num_iter = 1000;
-    
-    [evol_obj, evol_X] = grad_desc_non_conv_prob(X_init, alp, @compute_objective,@GradF,num_iter, Adj_G, D, numE ,E1,E2, delta, target);
-    
-    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
-    rate_X = estimate_rate_out_of_X_evol(evol_X);
-    disp([rate_obj, rate_X]);
-    
-    subplot(1,2,1);
-    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
-    
-    for r = 1:100
-        hold on;
-        subplot(1,2,2);
-        scatter(evol_X(1,:,r)',evol_X(2,:,r)','.'); % vizualize the position of the points
-        hold off;
+
+    alp_range = 0.01:0.05:1;
+    min_obj_val = inf;
+    best_alp = nan;
+    range_counts = 0;
+    all_rates = {};
+    for alp = alp_range
+        range_counts = range_counts + 1;
+        [evol_obj, evol_X] = grad_desc_non_conv_prob(X_init, alp, @compute_objective,@GradF,num_iter, Adj_G, D, numE ,E1,E2, delta, target);
+
+        rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+        rate_X = estimate_rate_out_of_X_evol(evol_X);
+        disp([evol_obj(end),rate_obj, rate_X]);
+        
+        all_rates{range_counts}{1} = evol_obj; all_rates{range_counts}{2} = evol_X;
+
+        if (evol_obj(end) < min_obj_val)
+            min_obj_val = evol_obj(end);
+            best_alp = alp;
+            best_evol_X = evol_X;
+            best_evol_obj = evol_obj;
+        end
+    end
+    if (verbose == 1)
+        subplot(1,2,1);
+        plot([1:1:num_iter*1],best_evol_obj'); % vizualize the evolution of the error
+        
+        for r = 1:100
+            hold on;
+            subplot(1,2,2);
+            scatter(best_evol_X(1,:,r)',best_evol_X(2,:,r)','.'); % vizualize the position of the points
+            hold off;
+        end
     end
     
+    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_alp, best_evol_X, best_evol_obj, all_rates};
+
 end
 
 % there is some problem with the convergence of this algorithm for the non
@@ -77,175 +92,298 @@ if (Alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex di
     %eta_1 = 0.001*eta_1;
     %mu_1  = 0.5*mu_1;
     
-    alpha = 0.001;%*delta;
-    beta  = 0.1;%*(4 + delta); 
+%     alpha = 0.001;%*delta;
+%     beta  = 0.1;%*(4 + delta); 
+%     
+%     %delta = 10;
+%     rng(1);
+%     Y_init = 1+0.01*randn(dim*numV, numE);
+%     Theta_init = 1+0.01*randn(dim,numV,1);
+%     
+%     num_iter = 1000;
+%    
+%     [evol_obj, evol_AveX] = alg_1_Scaman_17_non_conv(Y_init, Theta_init , @GradConjF, @compute_objective, num_iter, numE , D, Lap_line_G, delta, E1,E2,target,alpha, beta);
+% 
+%     rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+%     rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+%     disp([rate_obj, rate_X]);
+%     
+%     if (verbose == 1)
+%         subplot(1,2,1);
+%         plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
+% 
+%         for r = 1:100
+%             hold on;
+%             subplot(1,2,2);
+%             scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
+%             hold off;
+%         end
+%     end
     
-    %delta = 10;
-    
-    Y_init = rand(dim*numV, numE);
-    Theta_init = rand(dim,numV,1);
-    
-    num_iter = 1000;
-   
-    [evol_obj, evol_AveX] = alg_1_Scaman_17_non_conv(Y_init, Theta_init , @GradConjF, @compute_objective, num_iter, numE , D, Lap_line_G, delta, E1,E2,target,alpha, beta);
+end
 
-    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
-    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
-    disp([rate_obj, rate_X]);
-
-    
-    subplot(1,2,1);
-    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
-    
-    for r = 1:100
-        hold on;
-        subplot(1,2,2);
-        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
-        hold off;
-    end
+if (Alg_name == 2)
     
 end
 
 if (Alg_name == 3)
 
-    L_is = 1*(2 + delta)*ones(numE , 1);
+    rng(1);
+    Y_init = 1+0.01*randn(dim*numV, numE);
+    Theta_init = 1+0.01*randn(dim,numV,1);
+    
     R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
-    fixing_factor = 3; %this does not seem to make a big difference.
+    fixing_factor = 3; %this does not seem to make a big difference in some of the experiments
     num_iter = 1000;
     
-    Y_init = rand(dim*numV, numE);
-    Theta_init = rand(dim,numV,1);
+    min_obj_val = inf;
+    L_isval_range = 0.01:0.5:10;
     
-    [evol_obj, K, evol_AveX] = alg_2_Scaman_18_non_conv(Y_init, Theta_init , p,q, @ProxF, @AccGoss, @compute_objective, num_iter, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor);
+    range_counts = 0;
+    all_rates = {};
+    for L_isval = L_isval_range
+        range_counts = range_counts + 1;
+
+        L_is = L_isval*ones(numE , 1);
     
-    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
-    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
-    disp([rate_obj, rate_X]);
-    
-    subplot(1,2,1);
-    plot([1:K:num_iter*K],evol_obj'); % vizualize the evolution of the error
-    
-    for r = 1:100
-        hold on;
-        subplot(1,2,2);
-        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
-        hold off;
+        [evol_obj, K, evol_AveX] = alg_2_Scaman_18_non_conv(Y_init, Theta_init , p,q, @ProxF, @AccGoss, @compute_objective, num_iter, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor);
+
+        rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+        rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+        disp([evol_obj(end), rate_obj, rate_X]);
+
+        all_rates{range_counts}{1} = evol_obj; all_rates{range_counts}{2} = evol_AveX; all_rates{range_counts}{3} = K;
+
+        if (evol_obj(num_iter) < min_obj_val) % depending on what we are measuring, it could make sense to use evol_obj(num_iter/K) here
+            min_obj_val = evol_obj(end);
+            best_L_isval = L_isval;
+            best_evol_AveX = evol_AveX;
+            best_evol_obj = evol_obj;
+            best_K = K;
+        end
     end
+    if (verbose == 1)
+        subplot(1,2,1);
+        plot([1:best_K:num_iter*best_K],best_evol_obj'); % vizualize the evolution of the error
+        
+        for r = 1:100
+            hold on;
+            subplot(1,2,2);
+            scatter(best_evol_AveX(1,:,r)',best_evol_AveX(2,:,r)','.'); % vizualize the position of the points
+            hold off;
+        end
+    end
+    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_L_isval, best_evol_AveX, best_evol_obj, best_K, all_rates};
 
 end
 
 if (Alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
-   
-    X_init = randn(dim , numV , numE , 1);
-    U_init = randn(dim,numV,numE,numE);
     
-    rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.1;
+    rng(1);
+    X_init = 1+0.01*randn(dim , numV , numE , 1);
+    U_init = 1+0.01*randn(dim,numV,numE,numE);
+    
+    rho_range = 0.1:0.3:3; 
+    alp_range = 0.01:0.2:2;
     
     num_iter = 1000;
     
-    [evol_obj, evol_AveX] = PDMM_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
+    min_obj_val = inf;
+    range_counts = 0;
+    all_rates = {};
+    for rho = rho_range
+        for alp = alp_range
+            range_counts = range_counts + 1;
+            [evol_obj, evol_AveX] = PDMM_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
     
-    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
-    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
-    disp([rate_obj, rate_X]);
-    
-    subplot(1,2,1);
-    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
-    
-    for r = 1:100
-        hold on;
-        subplot(1,2,2);
-        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
-        hold off;
+            rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+            rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+            disp([evol_obj(end), rate_obj, rate_X]);
+            
+            all_rates{range_counts}{1} = evol_obj; all_rates{range_counts}{2} = evol_AveX;
+
+            if (evol_obj(num_iter) < min_obj_val) % depending on what we are measuring, it could make sense to use evol_obj(num_iter/K) here
+                min_obj_val = evol_obj(end);
+                best_rho = rho;
+                best_alp = alp;
+                best_evol_AveX = evol_AveX;
+                best_evol_obj = evol_obj;
+            end
+            
+        end
     end
+    
+    if (verbose == 1)
+        subplot(1,2,1);
+        plot([1:1:num_iter*1],best_evol_obj'); % vizualize the evolution of the error
+
+        for r = 1:100
+            hold on;
+            subplot(1,2,2);
+            scatter(best_evol_AveX(1,:,r)',best_evol_AveX(2,:,r)','.'); % vizualize the position of the points
+            hold off;
+        end
+    end
+    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
 
 if (Alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
 
-    X_init = randn(dim,numV,numE,1);
-    U_init = randn(dim,numV,numE,numE);
+    rng(1);
+    X_init = 1+0.01*randn(dim,numV,numE,1);
+    U_init = 1+0.01*randn(dim,numV,numE,numE);
     
-    rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.1;
-
+    rho_range = 0.01:0.01:0.2; 
+    alp_range = 0.01:0.2:2;
+    
     num_iter = 1000;
     
-    [evol_obj, evol_AveX] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
+    min_obj_val = inf;
 
-    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
-    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
-    disp([rate_obj, rate_X]);
-    
-    subplot(1,2,1);
-    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
-    
-    for r = 1:100
-        hold on;
-        subplot(1,2,2);
-        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
-        hold off;
+    range_counts = 0;
+    all_rates = {};
+    for rho = rho_range
+        for alp = alp_range
+            range_counts = range_counts + 1;
+            [evol_obj, evol_AveX] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
+
+            rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+            rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+            disp([evol_obj(end), rate_obj, rate_X]);
+
+            all_rates{range_counts}{1} = evol_obj; all_rates{range_counts}{2} = evol_AveX;
+            
+            if (evol_obj(num_iter) < min_obj_val) % depending on what we are measuring, it could make sense to use evol_obj(num_iter/K) here
+                min_obj_val = evol_obj(end);
+                best_rho = rho;
+                best_alp = alp;
+                best_evol_AveX = evol_AveX;
+                best_evol_obj = evol_obj;
+            end
+        
+        end
     end
+            
+    if (verbose == 1)
+        subplot(1,2,1);
+        plot([1:1:num_iter*1],best_evol_obj'); % vizualize the evolution of the error
+
+        for r = 1:100
+            hold on;
+            subplot(1,2,2);
+            scatter(best_evol_AveX(1,:,r)',best_evol_AveX(2,:,r)','.'); % vizualize the position of the points
+            hold off;
+        end
+    end
+    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
 
-
 if (Alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
 
-    X_init = randn(dim, numV, numE);
-    U_init = randn(dim, numV, numEline);
+    rng(1);
+    X_init = 1 + 0.01*randn(dim, numV, numE);
+    U_init = 1 + 0.01*randn(dim, numV, numEline);
     
-    rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.1;
+    rho_range = 0.01:0.05:1; 
+    alp_range = [(0.001:0.02:0.2), (0.2:0.2:2)];
     
     num_iter = 1000;
+      
+    min_obj_val = inf;
+
+    range_counts = 0;
+    all_rates = {};
+    for rho = rho_range
+        for alp = alp_range
+            range_counts = range_counts + 1;
+            [evol_obj, evol_AveX] = ADMM_edge_edge_no_Z_non_conv(p,q,X_init, U_init, rho, alp, numE, numEline, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, E1line,E2line,delta, target);
     
-    [evol_obj, evol_AveX] = ADMM_edge_edge_no_Z_non_conv(p,q,X_init, U_init, rho, alp, numE, numEline, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, E1line,E2line,delta, target);
-    
-    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
-    rate_X = estimate_rate_out_of_X_evol(evol_AveX);
-    disp([rate_obj, rate_X]);
-    
-    subplot(1,2,1);
-    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
-    
-    for r = 1:100
-        hold on;
-        subplot(1,2,2);
-        scatter(evol_AveX(1,:,r)',evol_AveX(2,:,r)','.'); % vizualize the position of the points
-        hold off;
+            rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+            rate_X = estimate_rate_out_of_X_evol(evol_AveX);
+            disp([evol_obj(end), rate_obj, rate_X]);
+            
+            all_rates{range_counts}{1} = evol_obj; all_rates{range_counts}{2} = evol_AveX;
+
+            if (evol_obj(num_iter) < min_obj_val) % depending on what we are measuring, it could make sense to use evol_obj(num_iter/K) here
+                min_obj_val = evol_obj(end);
+                best_rho = rho;
+                best_alp = alp;
+                best_evol_AveX = evol_AveX;
+                best_evol_obj = evol_obj;
+            end
+        end
     end
+    
+    if (verbose == 1)
+        subplot(1,2,1);
+        plot([1:1:num_iter*1],best_evol_obj'); % vizualize the evolution of the error
+
+        for r = 1:100
+            hold on;
+            subplot(1,2,2);
+            scatter(best_evol_AveX(1,:,r)',best_evol_AveX(2,:,r)','.'); % vizualize the position of the points
+            hold off;
+        end
+    end
+    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
 
 if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
 
-    X_init = randn(dim,2,numE);
-    Z_init = randn(dim,numV);
-    U_init = randn(dim,2,numE); 
+    X_init = 1 + 0.01*randn(dim,2,numE);
+    Z_init = 1 + 0.01*randn(dim,numV);
+    U_init = 1 + 0.01*randn(dim,2,numE); 
     
-    rho = 1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.1;
+    rho_range = 0.01:0.05:1; 
+    alp_range = [(0.001:0.02:0.2), (0.2:0.2:2)];
     
     num_iter = 1000;
+      
+    min_obj_val = inf;
+    min_rate_val = inf;
     
-    [evol_obj, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
+    range_counts = 0;
+    all_rates = {};
+    for rho = rho_range
+        for alp = alp_range
+            range_counts = range_counts + 1;
+            [evol_obj, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
     
-    rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
-    rate_Z = estimate_rate_out_of_X_evol(evol_Z);
-    disp([rate_obj, rate_Z]);
-    
-    subplot(1,2,1);
-    plot([1:1:num_iter*1],evol_obj'); % vizualize the evolution of the error
-    
-    for r = 1:100
-        hold on;
-        subplot(1,2,2);
-        scatter(evol_Z(1,:,r)',evol_Z(2,:,r)','.'); % vizualize the position of the points
-        hold off;
+            rate_obj = estimate_rate_out_of_plot(log(abs(evol_obj - evol_obj(end))));
+            rate_Z = estimate_rate_out_of_X_evol(evol_Z);
+            disp([evol_obj(end), rate_obj, rate_Z]);
+            
+            all_rates{range_counts}{1} = evol_obj; all_rates{range_counts}{2} = evol_Z;
+            
+            if (evol_obj(num_iter) < min_obj_val) % depending on what we are measuring, it could make sense to use evol_obj(num_iter/K) here
+                min_obj_val = evol_obj(end);
+                best_rho = rho;
+                best_alp = alp;
+                best_evol_Z = evol_Z;
+                best_evol_obj = evol_obj;
+            end            
+            
+        end
     end
-    
+    if (verbose == 1)
+        subplot(1,2,1);
+        plot([1:1:num_iter*1],best_evol_obj'); % vizualize the evolution of the error
+
+        for r = 1:100
+            hold on;
+            subplot(1,2,2);
+            scatter(best_evol_Z(1,:,r)',best_evol_Z(2,:,r)','.'); % vizualize the position of the points
+            hold off;
+        end
+    end
+    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
+
+end
+
+end
 end
 
 % this tests the Proximal operator by seeing if the solution returned is,
