@@ -8,6 +8,9 @@ numV_range = 5:5:40;
 type_range = 1:7;
 verbose = 0;
 
+all_rates_all_graphs =cell(length(numV_range)*length(type_range),2,8);
+file_name_to_save_work_space = ['./results/non_conv_prob/non_conv_prob_test_diff_graph_diff_size_no_reps_diff_algs_created_on_' datestr(datetime)];
+
 parpool(25);
 parfor mem_ix = 1:length(numV_range)*length(type_range) % we use the outer for-loop to search over different graph sizes and repetitions for each graph size
 
@@ -382,6 +385,9 @@ if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E)
     all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
+
+parsave([file_name_to_save_work_space,'_tmpID_',num2str(mem_ix)],all_rates_all_graphs{mem_ix});
+
 
 end
 end
