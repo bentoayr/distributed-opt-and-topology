@@ -9,7 +9,7 @@ type_range = 1:7;
 verbose = 0;
 
 all_rates_all_graphs =cell(length(numV_range)*length(type_range),2,8);
-file_name_to_save_work_space = ['./results/non_conv_prob/non_conv_prob_test_diff_graph_diff_size_no_reps_diff_algs_created_on_' datestr(datetime)];
+file_name_to_save_work_space = ['./results/non_conv_prob/non_conv_prob_test_diff_graph_diff_size_no_reps_GD_alg_only_created_on_' datestr(datetime)];
 
 parpool(25);
 parfor mem_ix = 1:length(numV_range)*length(type_range) % we use the outer for-loop to search over different graph sizes and repetitions for each graph size
@@ -26,7 +26,7 @@ graph_type = graph_type_count;
 all_rates_all_graphs{mem_ix}{1} = {numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line };
 
 
-for alg_name = 1:7
+for alg_name = 0:0
 
 
 
@@ -84,7 +84,7 @@ if (alg_name == 0)
         end
     end
     
-    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_alp, best_evol_X, best_evol_obj, all_rates};
+    all_rates_all_graphs{mem_ix}{2}{alg_name+1} = {min_obj_val, best_alp, best_evol_X, best_evol_obj, all_rates};
 
 end
 
@@ -176,7 +176,7 @@ if (alg_name == 3)
             hold off;
         end
     end
-    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_L_isval, best_evol_AveX, best_evol_obj, best_K, all_rates};
+    all_rates_all_graphs{mem_ix}{2}{alg_name+1} = {min_obj_val, best_L_isval, best_evol_AveX, best_evol_obj, best_K, all_rates};
 
 end
 
@@ -227,7 +227,7 @@ if (alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
             hold off;
         end
     end
-    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
+    all_rates_all_graphs{mem_ix}{2}{alg_name+1} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
 
@@ -279,7 +279,7 @@ if (alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
             hold off;
         end
     end
-    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
+    all_rates_all_graphs{mem_ix}{2}{alg_name+1} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
 
@@ -330,7 +330,7 @@ if (alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
             hold off;
         end
     end
-    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
+    all_rates_all_graphs{mem_ix}{2}{alg_name+1} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
 
@@ -382,7 +382,7 @@ if (alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E)
             hold off;
         end
     end
-    all_rates_all_graphs{mem_ix}{2}{alg_name} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
+    all_rates_all_graphs{mem_ix}{2}{alg_name+1} = {min_obj_val, best_rho,best_alp, best_evol_AveX, best_evol_obj, all_rates};
 
 end
 
