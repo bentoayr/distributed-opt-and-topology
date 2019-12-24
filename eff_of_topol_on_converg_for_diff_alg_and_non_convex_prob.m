@@ -29,7 +29,6 @@ all_rates_all_graphs{mem_ix}{1} = {numV,  numE, numEline, Adj_G,Lap_G, Adj_line_
 for alg_name = 1:7
 
 
-
 dim = 2;
 D = ones(numV);%rand(numV); % matrix of random distances. Note that only the distances corresponding to pairs that are edges matter. The rest does not matter.
 D = (D + D')/2; % This is not really necessary, but makes D more interpertable
@@ -44,11 +43,11 @@ q = 2;
 % at this point Alg_1 and Alg_2, based on using conjugate gradient descent
 % are not working, they are unstable
 
-if (Alg_name == 0)
+if (alg_name == 0)
     
     rng(1);
     X_init = 1+0.01*randn(dim,numV);
-    num_iter = 1000;
+    num_iter = 10000;
 
     alp_range = 0.01:0.05:1;
     min_obj_val = inf;
@@ -336,6 +335,7 @@ end
 
 if (Alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
 
+    rng(1);
     X_init = 1 + 0.01*randn(dim,2,numE);
     Z_init = 1 + 0.01*randn(dim,numV);
     U_init = 1 + 0.01*randn(dim,2,numE); 
