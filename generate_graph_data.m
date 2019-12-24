@@ -8,6 +8,7 @@ function [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1
 
         case 2
         %% complete bipartite graph
+        numV = 2*ceil(numV/2);
         G = ones(numV);
         G(1:(numV/2),1:(numV/2)) = 0;
         G((numV/2)+1:end,(numV/2)+1:end) = 0;
