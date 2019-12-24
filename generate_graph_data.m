@@ -11,7 +11,7 @@ function [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1
         G = ones(numV);
         G(1:(numV/2),1:(numV/2)) = 0;
         G((numV/2)+1:end,(numV/2)+1:end) = 0;
-
+        G(1:numV+1:end) = 0; % no diagonal
         case 3
         %% cyclic chain
         G = zeros(numV);
@@ -36,7 +36,6 @@ function [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1
             G(i,end-(K-i)) = 1;
         end
         G = G + G';
-        plot(graph(G));
 
         case 6
         %% periodic grid
