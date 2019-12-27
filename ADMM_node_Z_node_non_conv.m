@@ -1,4 +1,4 @@
-function [evol, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter, ProxFPair ,compute_objective,Adj_G, D, E1, E2, delta, target)
+function [evol, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter,num_iter_last_hist, ProxFPair ,compute_objective,Adj_G, D, E1, E2, delta, target)
 
     dim = size(Z_init,1);
     numV = size(Z_init,2);
@@ -8,7 +8,7 @@ function [evol, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, 
     U = U_init;
 
     evol = nan(num_iter,1);
-    evol_Z = nan(dim,numV,100);
+    evol_Z = nan(dim,numV,num_iter_last_hist);
 
     for t = 1:num_iter
 
@@ -52,8 +52,8 @@ function [evol, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, 
                 
         evol(t) = err;
         
-        if (num_iter - t < 100)
-           evol_Z( : , : , 100 - (num_iter - t) ) = Z; 
+        if (num_iter - t < num_iter_last_hist)
+           evol_Z( : , : , num_iter_last_hist - (num_iter - t) ) = Z; 
         end
         
         
