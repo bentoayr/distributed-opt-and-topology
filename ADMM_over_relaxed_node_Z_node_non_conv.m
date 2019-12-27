@@ -43,10 +43,11 @@ function [evol, evol_Z] = ADMM_over_relaxed_node_Z_node_non_conv(p,q,X_init, U_i
             Z(:,i) = (1-gamma)*Z(:,i) + (sum(gamma*X(:,1,e1Neigh) + U(:,1,e1Neigh),3) + sum(gamma*X(:,2,e2Neigh) + U(:,2,e2Neigh),3)) / (length(e1Neigh) + length(e2Neigh));
         end
         
+        U_old = U;
         for e = 1:numE
             i = E1(e); j = E2(e);
-            U(:,1, e) = U(:,1, e) +  gamma*X(:,1,e)  - Z(:,i)  + (1-gamma)*Z_old(:,i); 
-            U(:,2, e) = U(:,2, e) +  gamma*X(:,2,e)  - Z(:,j)  + (1-gamma)*Z_old(:,j); 
+            U(:,1, e) = U_old(:,1, e) +  gamma*X(:,1,e)  - Z(:,i)  + (1-gamma)*Z_old(:,i); 
+            U(:,2, e) = U_old(:,2, e) +  gamma*X(:,2,e)  - Z(:,j)  + (1-gamma)*Z_old(:,j); 
         end
         
         err =  compute_objective(Z,D,p,q,E1,E2,delta, target);

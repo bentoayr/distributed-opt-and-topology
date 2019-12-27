@@ -1,11 +1,11 @@
-numV = 15;
-graph_type = 7;
+%numV = 15;
+%graph_type = 7;
 
 %numV = 35;
 %graph_type = 5;
 
-%numV = 40;
-%graph_type = 3;
+numV = 40;
+graph_type = 3;
 
 
 
@@ -13,14 +13,6 @@ graph_type = 7;
 
 [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line ] = generate_graph_data(numV, graph_type);
 
-Walk_G = diag(sum(Adj_G).^(-1))*Adj_G;
-w_Walk_G = (eig(full(Walk_G)));
-w_star = max(w_Walk_G(w_Walk_G < 0.9999999));
-w_bar = min(w_Walk_G(w_Walk_G > -0.9999999));
-rho_star = 2*sqrt(1 - w_star^2);
-
-gamma_star = 4*inv(3 - sqrt((2-rho_star)/(2+rho_star)));
-%gamma_star = 2;
 
 
 dim = 2;
@@ -58,9 +50,9 @@ if (alg_name == 0)
     rng(1);
     X_init = 1+0.01*randn(dim,numV);
 
-    alp = 0.06; 
+    %alp = 0.06; 
     %alp = 0.06;
-    %alp = 0.96;
+    alp = 0.96;
     [evol_obj, evol_X] = grad_desc_non_conv_prob(X_init, alp, @compute_objective,@GradF,num_iter, Adj_G, D, numE ,E1,E2, delta, target);
 
 end
@@ -75,9 +67,9 @@ if (alg_name == 3)
     R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
     fixing_factor = 3; %this does not seem to make a big difference in some of the experiments
     
-    L_isval = 9.51;
-    %L_isval = 8.51;
     %L_isval = 9.51;
+    %L_isval = 8.51;
+    L_isval = 9.51;
         
     
     L_is = L_isval*ones(numE , 1);
@@ -93,14 +85,14 @@ if (alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
     U_init = 1+0.01*randn(dim,numV,numE,numE);
     
     
-    rho = 0.1;
-    alp = 0.81;
-    
     %rho = 0.1;
     %alp = 0.81;
     
     %rho = 0.1;
-    %alp = 0.21;
+    %alp = 0.81;
+    
+    rho = 0.1;
+    alp = 0.21;
            
     [evol_obj, evol_AveX] = PDMM_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
 
@@ -112,14 +104,14 @@ if (alg_name == 5) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
     X_init = 1+0.01*randn(dim,numV,numE,1);
     U_init = 1+0.01*randn(dim,numV,numE,numE);
     
-    rho = 0.02;
-    alp = 0.61;
+    %rho = 0.02;
+    %alp = 0.61;
     
     %rho = 0.01;
     %alp = 0.01;
     
-    %rho = 0.09;
-    %alp = 0.21;
+    rho = 0.09;
+    alp = 0.21;
     
     [evol_obj, evol_AveX] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, delta, target);
 end
@@ -131,14 +123,14 @@ if (alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
     U_init = 1 + 0.01*randn(dim, numV, numEline);
     
       
-    rho = 0.01;
-    alp = 0.001;
+    %rho = 0.01;
+    %alp = 0.001;
     
     %rho = 0.01;
     %alp = 0.141;
     
-    %rho = 0.91;
-    %alp = 0.001;
+    rho = 0.91;
+    alp = 0.001;
     
     [evol_obj, evol_AveX] = ADMM_edge_edge_no_Z_non_conv(p,q,X_init, U_init, rho, alp, numE, numEline, num_iter,  Adj_line_G, D, @ProxF , @compute_objective, E1, E2, E1line,E2line,delta, target);
     
@@ -152,14 +144,14 @@ if (alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E)
     U_init = 1 + 0.01*randn(dim,2,numE); 
 
     
-    rho = 0.96;
-    alp = 1.6;
+    %rho = 0.96;
+    %alp = 1.6;
     
     %rho = 0.01;
     %alp = 1.2;
     
-    %rho = 0.01;
-    %alp = 0.6;
+    rho = 0.01;
+    alp = 0.6;
     
     [evol_obj, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
     
@@ -171,9 +163,16 @@ if (alg_name == 8) % Consensus over-relaxed ADMM of the form (1/numE)* sum_( e =
     X_init = 1 + 0.01*randn(dim,2,numE);
     Z_init = 1 + 0.01*randn(dim,numV);
     U_init = 1 + 0.01*randn(dim,2,numE); 
+    
+    Walk_G = diag(sum(Adj_G).^(-1))*Adj_G;
+    w_Walk_G = (eig(full(Walk_G)));
+    w_star = max(w_Walk_G(w_Walk_G < 0.9999999));
+    w_bar = min(w_Walk_G(w_Walk_G > -0.9999999));
+    rho_star = 2*sqrt(1 - w_star^2);
 
-    
-    
+    %gamma_star = 4*inv(3 - sqrt((2-rho_star)/(2+rho_star)));
+    gamma_star = 2; % this is used when we have a ring with odd number of nodes
+
     [evol_obj, evol_Z] = ADMM_over_relaxed_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho_star, gamma_star, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
     
 end
