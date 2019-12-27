@@ -1,4 +1,4 @@
-function [evol, evol_X] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, D, ProxF , compute_objective, E1, E2, delta, target)
+function [evol, evol_X] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp, numE, num_iter, num_iter_last_hist, Adj_line_G, D, ProxF , compute_objective, E1, E2, delta, target)
 
     dim = size(X_init,1);
     numV = size(X_init,2);
@@ -7,7 +7,7 @@ function [evol, evol_X] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp
     U = U_init;
     
     evol = nan(num_iter,1);
-    evol_X = nan(dim,numV,100);
+    evol_X = nan(dim,numV,num_iter_last_hist);
     
     for t = 1:num_iter
         
@@ -40,8 +40,8 @@ function [evol, evol_X] = ADMM_edge_Z_edge_non_conv(p,q,X_init, U_init, rho, alp
         
         evol(t) = err;
         
-        if (num_iter - t < 100)
-           evol_X( : , : , 100 - (num_iter - t) ) = AveX; 
+        if (num_iter - t < num_iter_last_hist)
+           evol_X( : , : , num_iter_last_hist - (num_iter - t) ) = AveX; 
         end
         
         %evol = [evol, err ];

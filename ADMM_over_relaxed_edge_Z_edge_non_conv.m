@@ -1,4 +1,4 @@
-function [evol, evol_X] = ADMM_over_relaxed_edge_Z_edge_non_conv(p,q,X_init, U_init, Z_init, rho, gamma, numE, num_iter,  Adj_line_G, D, ProxF , compute_objective, E1, E2, delta, target)
+function [evol, evol_X] = ADMM_over_relaxed_edge_Z_edge_non_conv(p,q,X_init, U_init, Z_init, rho, gamma, numE, num_iter, num_iter_last_hist, Adj_line_G, D, ProxF , compute_objective, E1, E2, delta, target)
 
     dim = size(X_init,1);
     numV = size(X_init,2);
@@ -8,7 +8,7 @@ function [evol, evol_X] = ADMM_over_relaxed_edge_Z_edge_non_conv(p,q,X_init, U_i
     Z = Z_init;
     
     evol = nan(num_iter,1);
-    evol_X = nan(dim,numV,100);
+    evol_X = nan(dim,numV,num_iter_last_hist);
     
     for t = 1:num_iter
         
@@ -17,9 +17,7 @@ function [evol, evol_X] = ADMM_over_relaxed_edge_Z_edge_non_conv(p,q,X_init, U_i
         
         for e = 1:numE
             Neig_e = find(Adj_line_G(e,:));  
-            
-            %Z(:,:,Neig_e,e) = (1 - gamma)*Z_old(:,:,Neig_e,e) + 0.5*(gamma*X_old(:,:,Neig_e,1) + U_old(:,:,Neig_e,e) + permute(U_old(:,:,e,Neig_e),[1,2,4,3]) + repmat(gamma*X_old(:,:,e,1),1,1,length(Neig_e),1));
-            
+                        
             N = mean(  Z(:,:,Neig_e,e) - permute(U(:,:,e,Neig_e),[1,2,4,3])  , 3);
             % because of the way the PO was coded, we need to correct the
             % value of N
@@ -44,8 +42,8 @@ function [evol, evol_X] = ADMM_over_relaxed_edge_Z_edge_non_conv(p,q,X_init, U_i
         
         evol(t) = err;
         
-        if (num_iter - t < 100)
-           evol_X( : , : , 100 - (num_iter - t) ) = AveX; 
+        if (num_iter - t < num_iter_last_hist)
+           evol_X( : , : , num_iter_last_hist - (num_iter - t) ) = AveX; 
         end
         
         %evol = [evol, err ];
