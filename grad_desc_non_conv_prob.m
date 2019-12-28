@@ -1,11 +1,11 @@
-function [evol, evol_X] = grad_desc_non_conv_prob(X_init, alf, compute_objective,GradF,num_iter, Adj_G, D, numE ,E1,E2, delta, target)
+function [evol, evol_X] = grad_desc_non_conv_prob(X_init, alf, compute_objective,GradF,num_iter, num_iter_last_hist,Adj_G, D, numE ,E1,E2, delta, target)
 
     dim = size(X_init,1);
     numV = size(X_init,2);
     
     evol = nan(num_iter,1);
 
-    evol_X = nan(dim,numV,100);
+    evol_X = nan(dim,numV,num_iter_last_hist);
     
 
     X = X_init;
@@ -19,8 +19,8 @@ function [evol, evol_X] = grad_desc_non_conv_prob(X_init, alf, compute_objective
         
         evol(t) = err;
         
-        if (num_iter - t < 100)
-           evol_X(:,:,100 - (num_iter - t)) = X; 
+        if (num_iter - t < num_iter_last_hist)
+           evol_X(:,:,num_iter_last_hist - (num_iter - t)) = X; 
         end
     
         %scatter(X(1,:)',X(2,:)')

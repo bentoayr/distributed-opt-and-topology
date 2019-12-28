@@ -4,8 +4,9 @@ function [evol , evol_Z] = ADMM_over_relaxed_node_Z_node_cann_prob(X_init, U_ini
     Z = Z_init;
     U = U_init;
 
+    numV = dim;
     evol = nan(num_iter,1);
-    evol_Z = nan(dim,numV,num_iter_last_hist);
+    evol_Z = nan(dim,num_iter_last_hist);
 
     
     for t = 1:num_iter
@@ -33,7 +34,7 @@ function [evol , evol_Z] = ADMM_over_relaxed_node_Z_node_cann_prob(X_init, U_ini
 
         evol(t) = err ;
         if (num_iter - t < num_iter_last_hist)
-           evol_Z( : , : , num_iter_last_hist - (num_iter - t) ) = Z; 
+           evol_Z( : , num_iter_last_hist - (num_iter - t) ) = Z; 
         end
 
     end
