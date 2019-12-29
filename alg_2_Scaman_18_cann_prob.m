@@ -1,4 +1,6 @@
-function [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R,     fixing_factor)
+function [evol, K, evol_Theta_ave] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGoss, num_iter, num_iter_last_hist, numE , Lap_line_G, delta, E1,E2,target,L_is, R,     fixing_factor)
+
+    dim = size(Theta_init,1);
 
     W = Lap_line_G;
 
@@ -23,13 +25,13 @@ function [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGo
     
     W_Acc = AccGoss(eye(numE), W, K,c2,c3);
     
-    
     Y = Y_init*real(sqrtm(full(W)));
     %X = Y;
     Theta = repmat(Theta_init,1,numE);
     Theta_old = Theta;
 
-    evol = [];
+    evol = nan(num_iter,1);
+    evol_Theta_ave = nan(dim, numE, num_iter_last_hist );
     
     if (norm(full(W_Acc),2)*sigma*eta_3 > 1)
         disp(['Convergene condition not met because ', num2str(norm(full(W_Acc),2)*sigma*eta_3), ' is bigger than 1']);
@@ -53,8 +55,11 @@ function [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , ProxF, AccGo
         Theta = Theta_tilde;
         
         sum_Theta = sum_Theta + sum(Theta,2)/numE; % the paper asks to compute the average in space and time
-        evol = [evol, log(norm(sum_Theta/t - target)) ];
-
+        evol(t) =  log(norm(sum_Theta/t - target,'fro'));
         
+        if (num_iter - t < num_iter_last_hist)
+           evol_Theta_ave( : , num_iter_last_hist - (num_iter - t) ) = sum_Theta/t; 
+        end
+
     end
 end

@@ -1,8 +1,8 @@
 %test_TA_spec_min()
 %return;
 
-numV = 80;
-graph_type = 6;
+numV = 20;
+graph_type = 3;
 
 [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line ] = generate_graph_data(numV, graph_type);
 
@@ -13,8 +13,7 @@ delta = delta / dim; % we scale delta with 1/dim so that both terms in our objec
 target = -0.342; 
 
 
-
-for alg_name = 7
+for alg_name = 4
 
 
 if (alg_name == 0) %Gradient descent
@@ -45,31 +44,30 @@ if (alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex di
     % sum_i f_i for some functions f_i, whose Conjugate Gradient we use
     % bellow. For us i are edges and n is the number of edges, and f_e =
     % 0.5*(xi - xj)^2 + 0.5*(delta/dim)*|X|^2, where, we recall, delta/dim is done above 
-    Y_init = rand(dim, numE);
-    Theta_init = rand(dim,1);
-    alpha = delta;
-    beta  = 2 + delta;
+
     num_iter = 1000;
+    num_iter_last_hist = 100;
+    log_eps = -5;
+    verbose = 0;
+            
+    alf = optimizableVariable('a',[0.00001,0.0002],'Type','real'); % we optimize over these variable, and use the rules proposed in the paper to set the other variables. We could have equally well have optimized over the other variables directly as well.
+    beta = optimizableVariable('b',[0.0001,0.002],'Type','real');
     
-    alpha_range = delta/2: delta/5 :2*delta;
-    beta_range = (2 + delta)/5: (2 + delta)/5 :2*(2 + delta);
-    rate_evol = [];
-    for alpha =  alpha_range
-        for beta = beta_range
-            evol = alg_1_Scaman_17_cann_prob(Y_init, Theta_init, @GradConjF, num_iter, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
-            plot( [ 1 : num_iter  ] , evol');
-            drawnow;
-            rate_est = estimate_rate_out_of_plot(evol);
-            rate_evol = [rate_evol, rate_est];
-            disp(rate_est);
-        end
-    end
-    best_rate_alg_1 = min(rate_evol(rate_evol < 0));
-    best_alg_1_ix = find(rate_evol == best_rate_alg_1);
-    best_beta_alg_1 = beta_range(mod(best_alg_1_ix-1,length(beta_range))+1);
-    best_alf_alg_1 = alpha_range(floor((best_alg_1_ix-1)/length(beta_range))+1);
+    fun = @(x) alg_1_Scaman_17_cann_prob_time(num_iter_last_hist,num_iter,x.b,x.a,verbose, log_eps, dim, numE , Lap_line_G, delta, E1,E2,target);
+   
+    results = bayesopt(fun,[alf,beta],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus');
+    T_best = results.MinObjective;
+    alf_best = results.XAtMinObjective.a;
+    beta_best = results.XAtMinObjective.b;
+   
+    rng(1);
+    Y_init = 1 + 0.01*randn(dim, numE);
+    Theta_init = 1 + 0.01*randn(dim,1);
+   
+    [evol , ~ ] = alg_1_Scaman_17_cann_prob(Y_init, Theta_init, @GradConjF, num_iter,num_iter_last_hist, numE , Lap_line_G, delta, E1,E2,target,alf_best, beta_best);
     
-    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_1, best_alg_1_ix, best_beta_alg_1 , best_alf_alg_1};
+    figure;
+    plot(evol);
     
 end
 
@@ -79,33 +77,29 @@ if (alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex di
     % bellow. For us i are edges and n is the number of edges, and f_e =
     % 0.5*(xi - xj)^2 + 0.5*(delta/dim)*|X|^2, where, we recall, delta/dim is done above 
     
-    Y_init = rand(dim, numE);
-    Theta_init = rand(dim,1);
-    alpha = delta;
-    beta  = 2 + delta;
-    num_iter = 3000;
-    
-    alpha_range = delta/2: delta/3 :3*delta;
-    beta_range = (2 + delta)/5: (2 + delta)/3 :3*(2 + delta);
-    rate_evol = [];
-    for alpha =  alpha_range
-        for beta = beta_range
-            [evol,K] = alg_2_Scaman_17_cann_prob(Y_init, Theta_init , @GradConjF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
-    
-            plot([1:K:num_iter*K],evol'); % each iteration corresponds to K gossip steps
-            drawnow;
-            rate_est = estimate_rate_out_of_plot(evol);
-            rate_evol = [rate_evol, rate_est];
-            disp(rate_est);
-        end
-    end
-    best_rate_alg_2 = min(rate_evol(rate_evol < 0));
-    best_alg_2_ix = find(rate_evol == best_rate_alg_2);
-    best_beta_alg_2 = beta_range(mod(best_alg_2_ix-1,length(beta_range))+1);
-    best_alf_alg_2 = alpha_range(floor((best_alg_2_ix-1)/length(beta_range))+1);
+    num_iter = 1000;
+    num_iter_last_hist = 100;
+    log_eps = -5;
+    verbose = 0;
             
-    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_2, best_alg_2_ix, best_beta_alg_2 , best_alf_alg_2};
+    alf = optimizableVariable('a',[0.1,2],'Type','real'); % we optimize over these variable, and use the rules proposed in the paper to set the other variables. We could have equally well have optimized over the other variables directly as well.
+    beta = optimizableVariable('b',[0.1,2],'Type','real');
+    
+    fun = @(x) alg_2_Scaman_17_cann_prob_time(num_iter_last_hist,num_iter,x.b,x.a,verbose, log_eps, dim, numE , Lap_line_G, delta, E1,E2,target);
+   
+    results = bayesopt(fun,[alf,beta],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus');
+    T_best = results.MinObjective;
+    alf_best = results.XAtMinObjective.a;
+    beta_best = results.XAtMinObjective.b;
+   
+    rng(1);
+    Y_init = 1 + 0.01*randn(dim, numE);
+    Theta_init = 1 + 0.01*randn(dim,1);
+    
+    [evol,K, ~] = alg_2_Scaman_17_cann_prob(Y_init, Theta_init , @GradConjF, @AccGoss, num_iter,num_iter_last_hist, numE , Lap_line_G, delta, E1,E2,target,alf_best, beta_best);
 
+    figure;
+    plot([1:K:num_iter*K],evol);
     
 end
 
@@ -117,64 +111,62 @@ if (alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optim
     % For us i are edges and n is the number of edges, and f_e =
     % 0.5*(xi - xj)^2 + 0.5*(delta/dim)*|X|^2, where, we recall, delta/dim is done above 
     
-    Y_init = rand(dim, numE);
-    Theta_init = rand(dim,1);
-    
-    L_is = 1*(2 + delta)*ones(numE , 1);
-    R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
-    fixing_factor = 3; %this does not seem to make a big difference.
     num_iter = 50000;
-    
-    L_is_range = 0.01*(2 + delta):0.01*(2 + delta):0.1*(2 + delta);
-    rate_evol = [ ];
-    for L_is_val =  L_is_range
-            L_is = L_is_val*ones(numE , 1);
-            [evol, K] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , @ProxF, @AccGoss, num_iter, numE , Lap_line_G, delta, E1,E2,target,L_is, R, fixing_factor);
-            plot([1:K:num_iter*K],evol'); % each iteration corresponds to K gossip steps
-            drawnow;
-            rate_est = estimate_rate_out_of_plot(evol);
-            rate_evol = [rate_evol, rate_est];
-            disp(rate_est);
-    end
-    best_rate_alg_3 = min(rate_evol(rate_evol < 0));
-    best_alg_3_ix = find(rate_evol == best_rate_alg_3);
-    best_L_is_val_alg_3 = L_is_range(  best_alg_3_ix  );
-    
-    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_3, best_alg_3_ix, best_L_is_val_alg_3};
+    num_iter_last_hist = 100;
+    log_eps = -3;
+    verbose = 0;
 
+    R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
+    %fixing_factor = 3; %this does not seem to make a big difference, as long as it is choosen such that the algorithm works
+
+    L_vals = optimizableVariable('L',[0.001,0.005],'Type','real'); % we optimize over these variable, and use the rules proposed in the paper to set the other variables. We could have equally well have optimized over the other variables directly as well.
+    fix_fact = optimizableVariable('F',[0.1,2],'Type','real'); 
+    
+    
+    fun = @(x) alg_2_Scaman_18_cann_prob_time(num_iter_last_hist,num_iter,x.L,R,x.F,verbose, log_eps, dim, numE , Lap_line_G, delta, E1,E2,target);
+
+    results = bayesopt(fun,[L_vals,fix_fact],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus');
+    T_best = results.MinObjective;
+    L_is_vals_best = results.XAtMinObjective.L;
+    fix_fact_best = results.XAtMinObjective.F;
+        
+    rng(1);
+    Y_init = 1 + 0.01*randn(dim, numE);
+    Theta_init = 1 + 0.01*randn(dim,1);
+    
+    L_is_best = L_is_vals_best*ones(numE , 1);
+    
+    [evol, K, ~] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , @ProxF, @AccGoss, num_iter,num_iter_last_hist, numE , Lap_line_G, delta, E1,E2,target,L_is_best, R, fix_fact_best);
+    
+    figure;
+    plot([1:K:num_iter*K],evol);
+    
 end
 
 if (alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
-   
-    X_init = randn(dim, numE, 1);
-    U_init = randn(dim, numE, numE);
     
-    rho = 0.1; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.1;
-    num_iter = 300;
+    num_iter = 1000;
+    num_iter_last_hist = 10;   
+    log_eps = -10;
+    verbose = 0;
+    
+    alf = optimizableVariable('a',[0.1,2],'Type','real'); % we optimize over these variable, and use the rules proposed in the paper to set the other variables. We could have equally well have optimized over the other variables directly as well.
+    rho = optimizableVariable('r',[0.000005,0.00005],'Type','real'); 
+    
+    fun = @(x) PDMM_cann_prob_time(num_iter_last_hist,num_iter,x.r,x.a,verbose, log_eps, dim, numE , Adj_line_G, delta, E1,E2,target);
+
+    results = bayesopt(fun,[alf,rho],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus');
+    T_best = results.MinObjective;
+    alp_best = results.XAtMinObjective.a;
+    rho_best = results.XAtMinObjective.r;
        
-    alpha_range = 0.001:0.001:0.01;
-    rho_range = 0.000001:0.000001:0.00001;%:0.0000001:0.00001;
-    rate_evol = [];
-    for alp =  alpha_range
-        for rho = rho_range
-            evol = PDMM_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter,  Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
+    rng(1);
+    X_init = 1 + 0.01*randn(dim, numE, 1);
+    U_init = 1 + 0.01*randn(dim, numE, numE);
     
-            plot([1:1:num_iter],evol'); 
-            drawnow;
-            rate_est = estimate_rate_out_of_plot(evol);
-            rate_evol = [rate_evol, rate_est];
-
-            disp(rate_est);
-        end
-    end
-    best_rate_alg_4 = min(rate_evol(rate_evol < 0));
-    best_alg_4_ix = find(rate_evol == best_rate_alg_4);
-    best_rho_alg_4 = rho_range(mod(best_alg_4_ix-1,length(rho_range))+1);
-    best_alf_alg_4 = alpha_range(floor((best_alg_4_ix-1)/length(rho_range))+1);
-
-    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_4, best_alg_4_ix, best_rho_alg_4, best_alf_alg_4};
-
+    evol = PDMM_cann_prob(X_init, U_init, rho_best / numE, alp_best, numE, num_iter, num_iter_last_hist, Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
+    
+    plot([1:1:num_iter],evol'); 
     
 end
 
@@ -224,7 +216,6 @@ if (alg_name == 6) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = 
     rho = 0.00001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
     alp = 1;
     num_iter = 1000;
-   
     
     alpha_range = 0.01:0.04:0.4;
     rho_range = 0.000001:0.000001:0.00001;%:0.0000001:0.00001;
@@ -299,23 +290,134 @@ if (alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,
     err_star = log(tau_star.^(1:num_iter));
     hold on;
     plot(err_star);
-
-    
-    
     
 end
     
 
 end
 
+
+function T = PDMM_cann_prob_time(num_iter_last_hist,num_iter,rho,alp,verbose, log_eps, dim, numE , Adj_line_G, delta, E1,E2,target)
+
+    rng(1);
+    X_init = 1 + 0.01*randn(dim, numE, 1);
+    U_init = 1 + 0.01*randn(dim, numE, numE);
+
+    [evol, ~] = PDMM_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter, num_iter_last_hist, Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
+    
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+
+end
+
+
+
+
+function T = alg_2_Scaman_18_cann_prob_time(num_iter_last_hist,num_iter,L_is_vals,R,fixing_factor,verbose, log_eps, dim, numE , Lap_line_G, delta, E1,E2,target)
+    
+    rng(1);
+    Y_init = 1 + 0.01*randn(dim, numE);
+    Theta_init = 1 + 0.01*randn(dim,1);
+    
+    L_is = L_is_vals*ones(numE , 1);
+    %R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
+    %fixing_factor = 3; %this does not seem to make a big difference, as long as it is choosen such that the algorithm works
+    
+    [evol, K, ~] = alg_2_Scaman_18_cann_prob(Y_init, Theta_init , @ProxF, @AccGoss, num_iter,num_iter_last_hist, numE , Lap_line_G, delta, E1,E2,target,L_is, R, fixing_factor);
+       
+    
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+
+    T = T*K; % we need to count the number of gossips steps that are performed as well, because they count as communication steps
+
+end
+
+
+function T = alg_2_Scaman_17_cann_prob_time(num_iter_last_hist,num_iter,beta,alpha,verbose, log_eps, dim, numE , Lap_line_G, delta, E1,E2,target)
+
+    rng(1);
+    Y_init = 1 + 0.01*rand(dim, numE);
+    Theta_init = 1 + 0.01*rand(dim,1);
+        
+    [evol,K, ~] = alg_2_Scaman_17_cann_prob(Y_init, Theta_init , @GradConjF, @AccGoss, num_iter,num_iter_last_hist, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
+       
+    
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+
+    T = T*K; % we need to count the number of gossips steps that are performed as well, because they count as communication steps
+
+end
+
+
+
+function T = alg_1_Scaman_17_cann_prob_time(num_iter_last_hist,num_iter,beta,alpha,verbose, log_eps, dim, numE , Lap_line_G, delta, E1,E2,target)
+
+    rng(1);
+    
+    Y_init = 1 + 0.01*randn(dim, numE);
+    Theta_init = 1 + 0.01*rand(dim,1);
+   
+    [evol , ~ ] = alg_1_Scaman_17_cann_prob(Y_init, Theta_init, @GradConjF, num_iter,num_iter_last_hist, numE , Lap_line_G, delta, E1,E2,target,alpha, beta);
+    
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+
+
+end
 
 function T = ADMM_over_relaxed_node_Z_node_cann_prob_time(rho, gamma,numV,log_eps,verbose,num_iter,num_iter_last_hist, numE , E1, E2,delta, target)
     dim = numV;
    
     rng(1);
-    X_init = randn(2,numE);
-    Z_init = randn(dim,1);
-    U_init = randn(2,numE); 
+    X_init = 1 + 0.01*randn(2,numE);
+    Z_init = 1 + 0.01*randn(dim,1);
+    U_init = 1 + 0.01*randn(2,numE); 
 
     [evol,~] = ADMM_over_relaxed_node_Z_node_cann_prob(X_init, U_init, Z_init, rho, gamma,dim, numE, num_iter,num_iter_last_hist, @ProxFPair , E1, E2, delta, target);
     if (evol(end) < log_eps)
