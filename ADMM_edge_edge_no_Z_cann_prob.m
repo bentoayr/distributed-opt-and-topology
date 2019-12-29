@@ -1,4 +1,6 @@
-function evol = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho, alp, numE, num_iter,  Adj_line_G, ProxF , numEline, E1line, E2line, E1, E2, delta, target)
+function [ evol , evol_X ] = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho, alp, numE, num_iter,  num_iter_last_hist, Adj_line_G, ProxF , numEline, E1line, E2line, E1, E2, delta, target)
+
+    dim = size(X_init,1);
 
     X = X_init;
 
@@ -7,8 +9,9 @@ function evol = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho, alp, numE, nu
 
     %U_old = U;
 
-    evol = [];
-
+    evol = nan( num_iter , 1 );
+    evol_X = nan( dim , numE , num_iter_last_hist );
+    
     for t = 1:num_iter
 
         X_old = X;
@@ -27,7 +30,10 @@ function evol = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho, alp, numE, nu
             U(:,linee) = U_old(:,linee) + alp*( X(:,e1) - X(:,e2) );
         end
 
-        evol = [evol, log(norm( X    - target)) ];        
+        evol(t) = log(norm( X    -  target,'fro')) ;  
+        if (num_iter - t < num_iter_last_hist)
+           evol_X( :, : , num_iter_last_hist - (num_iter - t) ) = X; 
+        end
     end
 
 

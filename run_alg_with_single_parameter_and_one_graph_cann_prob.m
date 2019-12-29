@@ -12,8 +12,7 @@ delta = 0.001;
 delta = delta / dim; % we scale delta with 1/dim so that both terms in our objective have the same order of magnitude as the graph grows
 target = -0.342; 
 
-
-for alg_name = 4
+for alg_name = 0:7
 
 
 if (alg_name == 0) %Gradient descent
@@ -37,6 +36,8 @@ if (alg_name == 0) %Gradient descent
     [evol, ~] = grad_desc_cann_prob(X, alf_best*numE, num_iter,num_iter_last_hist, Lap_G, numE , delta, target);
     figure;
     plot(evol);
+    title('Alg 0');
+
 end
 
 if (alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex distributed optimization in networks"
@@ -68,6 +69,7 @@ if (alg_name == 1) %Alg 1: "Optimal algorithms for smooth and strongly convex di
     
     figure;
     plot(evol);
+    title('Alg 1');
     
 end
 
@@ -100,6 +102,7 @@ if (alg_name == 2) %Alg 2: "Optimal algorithms for smooth and strongly convex di
 
     figure;
     plot([1:K:num_iter*K],evol);
+    title('Alg 2');
     
 end
 
@@ -140,6 +143,7 @@ if (alg_name == 3) % Alg 2: "Optimal Algorithms for Non-Smooth Distributed Optim
     
     figure;
     plot([1:K:num_iter*K],evol);
+    title('Alg 3');
     
 end
 
@@ -166,83 +170,69 @@ if (alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-
     
     evol = PDMM_cann_prob(X_init, U_init, rho_best / numE, alp_best, numE, num_iter, num_iter_last_hist, Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
     
+    figure;
     plot([1:1:num_iter],evol'); 
+    title('Alg 4');
     
 end
 
 if (alg_name == 5) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = Z_(e,e') and x_e' = Z_(e,e') if (e,e') is in the line graph.
-   
-    X_init = randn(dim,numE,1);
-    U_init = randn(dim,numE,numE);
     
-    rho = 0.000001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 0.1;
     num_iter = 1000;
+    num_iter_last_hist = 10;   
+    log_eps = -10;
+    verbose = 0;
     
-    alpha_range = 0.001:0.003:0.03;
-    rho_range = 0.000001:0.000001:0.00001;%:0.0000001:0.00001;
-    rate_evol = [];
-    for alp =  alpha_range
-        for rho = rho_range
-            evol = ADMM_edge_Z_edge_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter,  Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
-            rate_est = estimate_rate_out_of_plot(evol);
-
-            plot([1:1:num_iter*1],evol'); 
-            drawnow;
-            disp(rate_est);
-            
-            rate_evol = [rate_evol, rate_est];
-
-            disp(rate_est);
-        
-        end
-    end
-    best_rate_alg_5 = min(rate_evol(rate_evol < 0));
-    best_alg_5_ix = find(rate_evol == best_rate_alg_5);
-    best_rho_alg_5 = rho_range(mod(best_alg_5_ix-1,length(rho_range))+1);
-    best_alf_alg_5 = alpha_range(floor((best_alg_5_ix-1)/length(rho_range))+1);
-
-    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_5, best_alg_5_ix, best_rho_alg_5, best_alf_alg_5};
+    gamma = optimizableVariable('g',[0.1,2],'Type','real'); % we optimize over these variable, and use the rules proposed in the paper to set the other variables. We could have equally well have optimized over the other variables directly as well.
+    rho = optimizableVariable('r',[0.000005,0.00005],'Type','real'); 
     
+    fun = @(x) ADMM_over_relaxed_edge_Z_edge_cann_prob_time(num_iter_last_hist,num_iter,x.r,x.g,verbose, log_eps, dim, numE , Adj_line_G, delta, E1,E2,target);
+
+    results = bayesopt(fun,[gamma,rho],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus');
+    T_best = results.MinObjective;
+    gamma_best = results.XAtMinObjective.g;
+    rho_best = results.XAtMinObjective.r;
+    
+    rng(1);
+    X_init = 1 + 0.01*randn(dim , numE , 1);
+    U_init = 1 + 0.01*randn(dim , numE , numE);
+    Z_init = 1 + 0.01*randn(dim , numE , numE);
+    
+    evol = ADMM_over_relaxed_edge_Z_edge_cann_prob(X_init, U_init, Z_init, rho_best / numE, gamma_best, numE, num_iter, num_iter_last_hist, Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
+    
+    figure;
+    plot([1:1:num_iter*1],evol'); 
+    title('Alg 5');
     
 end
 
 
 if (alg_name == 6) % Consensus ADMM of the form sum_e f_e(x_e) subject to x_e = x_e' if (e,e') is in the line graph. The difference between this algorithm and the one above (Alg 5) is that here we do not use the consensus variable Z_(e,e') in the augmented lagrangian
-
-    X_init = randn(dim,numE);
-    U_init = randn(dim,numEline);
     
-    rho = 0.00001; % the algorithm should always converge no matter what rho we choose. However, convergence might be really really slow.
-    alp = 1;
     num_iter = 1000;
+    num_iter_last_hist = 10;   
+    log_eps = -5;
+    verbose = 0;
     
-    alpha_range = 0.01:0.04:0.4;
-    rho_range = 0.000001:0.000001:0.00001;%:0.0000001:0.00001;
-    rate_evol = [];
-    for alp =  alpha_range
-        for rho = rho_range
-            evol = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter,  Adj_line_G, @ProxF ,numEline, E1line, E2line, E1, E2, delta / numE, target);
-            
-            rate_est = estimate_rate_out_of_plot(evol);
-
-            plot([1:1:num_iter*1],evol'); 
-            drawnow;
-            disp(rate_est);
-            
-            rate_evol = [rate_evol, rate_est];
-
-            disp(rate_est);
-        
-        end
-    end
-    best_rate_alg_6 = min(rate_evol(rate_evol < 0));
-    best_alg_6_ix = find(rate_evol == best_rate_alg_6);
-    best_rho_alg_6 = rho_range(mod(best_alg_6_ix-1,length(rho_range))+1);
-    best_alf_alg_6 = alpha_range(floor((best_alg_6_ix-1)/length(rho_range))+1);    
+    alp = optimizableVariable('a',[0.02,0.2],'Type','real'); % we optimize over these variable, and use the rules proposed in the paper to set the other variables. We could have equally well have optimized over the other variables directly as well.
+    rho = optimizableVariable('r',[0.000002,0.00002],'Type','real'); 
     
-    all_rates_all_graphs{mem_ix}{2}{alg_name_count} = {best_rate_alg_6, best_alg_6_ix, best_rho_alg_6, best_alf_alg_6};
+    fun = @(x) ADMM_edge_edge_no_Z_cann_prob_time(num_iter_last_hist,num_iter,x.r,x.a,verbose, log_eps, dim, numE ,numEline, Adj_line_G, delta,E1line, E2line,  E1,E2,target);
 
+    results = bayesopt(fun,[alp,rho],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus');
+    T_best = results.MinObjective;
+    alp_best = results.XAtMinObjective.a;
+    rho_best = results.XAtMinObjective.r;
+    
+    rng(1);
+    X_init = 1 + 0.01*randn(dim,numE);
+    U_init = 1 + 0.01*randn(dim,numEline);
+
+    [evol, ~] = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho_best / numE, alp_best, numE, num_iter, num_iter_last_hist, Adj_line_G, @ProxF ,numEline, E1line, E2line, E1, E2, delta / numE, target);
+    
+    figure;
+    plot([1:1:num_iter*1],evol'); 
+    title('Alg 6');
     
 end
 
@@ -255,8 +245,8 @@ if (alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,
     log_eps = -10;
     verbose = 0;
 
-    %rho = optimizableVariable('r',[0.00001,0.001],'Type','real'); % for ring graph
-    rho = optimizableVariable('r', [0.000001,0.00003],'Type','real'); % for K-hop graph
+    rho = optimizableVariable('r',[0.00001,0.001],'Type','real'); % for ring graph
+    %rho = optimizableVariable('r', [0.000001,0.00003],'Type','real'); % for K-hop graph
     % for E-R graph
     gamma = optimizableVariable('g',[0.5,2],'Type','real');  % if gamma is larger than 2 ADMM's transition matrix will be unstable
     
@@ -278,6 +268,7 @@ if (alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,
 
     figure;
     plot(evol);
+    title('Alg 7');
     
     Walk_G = diag(sum(Adj_G).^(-1))*Adj_G;
     w_Walk_G = real(eig(full(Walk_G)));
@@ -293,6 +284,60 @@ if (alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,
     
 end
     
+
+end
+
+
+
+function T = ADMM_edge_edge_no_Z_cann_prob_time(num_iter_last_hist,num_iter,rho,alp,verbose, log_eps, dim, numE ,numEline, Adj_line_G, delta, E1line, E2line, E1,E2,target)
+
+    rng(1);
+    X_init = 1 + 0.01*randn(dim,numE);
+    U_init = 1 + 0.01*randn(dim,numEline);
+   
+    [evol, ~] = ADMM_edge_edge_no_Z_cann_prob(X_init, U_init, rho / numE, alp, numE, num_iter, num_iter_last_hist, Adj_line_G, @ProxF ,numEline, E1line, E2line, E1, E2, delta / numE, target);
+    
+    plot([1:1:num_iter*1],evol'); 
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+
+end
+
+
+function T = ADMM_over_relaxed_edge_Z_edge_cann_prob_time(num_iter_last_hist,num_iter,rho,gamma,verbose, log_eps, dim, numE , Adj_line_G, delta, E1,E2,target)
+
+    rng(1);
+    X_init = 1 + 0.01*randn(dim,numE,1);
+    U_init = 1 + 0.01*randn(dim,numE,numE);
+    Z_init = 1 + 0.01*randn(dim,numE,numE);
+
+    [evol , ~] = ADMM_over_relaxed_edge_Z_edge_cann_prob(X_init, U_init, Z_init, rho / numE, gamma, numE, num_iter, num_iter_last_hist, Adj_line_G, @ProxF ,  E1, E2, delta / numE, target);
+    
+    plot([1:1:num_iter*1],evol'); 
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
 
 end
 

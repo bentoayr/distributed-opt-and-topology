@@ -35,7 +35,7 @@ function [evol, evol_X] = ADMM_over_relaxed_edge_Z_edge_cann_prob(X_init, U_init
         
         evol(t) = log(norm( X    - target));
         
-         if (num_iter - t < num_iter_last_hist)
+        if (num_iter - t < num_iter_last_hist)
            evol_X( : , num_iter_last_hist - (num_iter - t) ) = AveX; 
         end
         
