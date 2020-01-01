@@ -1,4 +1,4 @@
-%% this code solves the problem  0.5*(delta)*(1/numV)\sum_{i \in V} |x_i - target|^2   +  (1/ |E|) sum_{(i,j) \in E} | | x_i - x_j|^p  - d^p_ij  |^q
+%%  this code solves the problem  0.5*(delta)*(1/numV)\sum_{i \in V} |x_i - target|^2   +  (1/ |E|) sum_{(i,j) \in E} | | x_i - x_j|^p  - d^p_ij  |^q
 % for some graph G = (V, E) and for different values of q and p. Each x_i is associated with a node i and has dimension dim
 % target is a vector/matrix with all entries equal to "target"
 

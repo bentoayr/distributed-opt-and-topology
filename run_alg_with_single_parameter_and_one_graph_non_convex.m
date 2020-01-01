@@ -4,19 +4,21 @@
 %numV = 35;
 %graph_type = 5;
 
-numV = 40;
+%time_evol = sparse(1);
+
+try
+    delete(gcp('nocreate'));
+catch
+end
+parpool(20);
+
+for numV = [80]%60%[60:20:160]
 graph_type = 3;
 
-
-
-
-
-[numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line ] = generate_graph_data(numV, graph_type);
-
-
+[num,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line ] = generate_graph_data(numV, graph_type);
 
 dim = 2;
-D = ones(numV);%rand(numV); % matrix of random distances. Note that only the distances corresponding to pairs that are edges matter. The rest does not matter.
+D = ones(numV); %rand(numV); % matrix of random distances. Note that only the distances corresponding to pairs that are edges matter. The rest does not matter.
 D = (D + D')/2; % This is not really necessary, but makes D more interpertable
 
 delta = 1; % this delta is already rescaled by E
@@ -25,57 +27,93 @@ target = 1; % this pushes all of the points to the (1,1,1,1,1,1....,1) region of
 p = 2;
 q = 2;
 
-num_iter = 10000;
-
-f1 = figure(1) ;ax1 = axes ;hold(ax1,'on');
-set(gca, 'FontName', 'Times New Roman');
-set(gca, 'FontSize', 18);
-set(gca, 'defaultLineLineWidth', 2);
-set(gcf, 'color', 'w');
-box on;
-
-f2 = figure(2) ;ax2 = axes ; hold(ax2,'on');
-set(gca, 'FontName', 'Times New Roman');
-set(gca, 'FontSize', 18);
-set(gca, 'defaultLineLineWidth', 2);
-set(gcf, 'color', 'w');
-box on;
+% f1 = figure(1) ;ax1 = axes ;hold(ax1,'on');
+% set(gca, 'FontName', 'Times New Roman');
+% set(gca, 'FontSize', 18);
+% set(gca, 'defaultLineLineWidth', 2);
+% set(gcf, 'color', 'w');
+% box on;
+% 
+% f2 = figure(2) ;ax2 = axes ; hold(ax2,'on');
+% set(gca, 'FontName', 'Times New Roman');
+% set(gca, 'FontSize', 18);
+% set(gca, 'defaultLineLineWidth', 2);
+% set(gcf, 'color', 'w');
+% box on;
 
 
-for alg_name = [0, 3, 4, 5, 6, 7, 8]
+for alg_name = [3]
 
 
 if (alg_name == 0)
     
+    num_iter = 10000;
+    num_iter_last_hist = 100;
+    
+    log_eps = -15;
+    verbose = 0;
+    
+    alf = optimizableVariable('a',[0.1,30],'Type','real');
+    fun = @(x)grad_desc_non_conv_prob_time(x.a,numV,dim,log_eps,verbose,num_iter,num_iter_last_hist, Adj_G, numE , E1,E2,D,delta, target);
+   
+    results = bayesopt(fun,[alf],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus','UseParallel',true,'MaxObjectiveEvaluations',60);
+    T_best = results.MinObjective;
+    alf_best = results.XAtMinObjective.a;
+   
     rng(1);
-    X_init = 1+0.01*randn(dim,numV);
+    X_init = 1 + 0.01*randn(dim,numV);
+    [evol, ~] = grad_desc_non_conv_prob(X_init, alf_best, @compute_objective,@GradF,num_iter,num_iter_last_hist, Adj_G, D, numE ,E1,E2, delta, target);
+    
+    figure;
+    plot(log(abs(evol(end) - evol)));
+    title('Alg 0');
+  
+    time_evol(alg_name+1,numV) =    T_best; 
 
-    %alp = 0.06; 
-    %alp = 0.06;
-    alp = 0.96;
-    [evol_obj, evol_X] = grad_desc_non_conv_prob(X_init, alp, @compute_objective,@GradF,num_iter, Adj_G, D, numE ,E1,E2, delta, target);
 
 end
 
 
 if (alg_name == 3)
+    
+    
+    num_iter = 10000;
+    num_iter_last_hist = 100;
+    
+    log_eps = -10;
+    verbose = 0;
+    
+    R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
+
+    
+    Lval = optimizableVariable('l',[0.01,0.1],'Type','real');
+    fixval = optimizableVariable('f',[1,3],'Type','real');
+    
+    fun = @(x) alg_2_Scaman_18_non_conv_time(p,q,x.l,R,x.f,numV,dim,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,D,delta, target);
+
+   
+    results = bayesopt(fun,[Lval,fixval],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus','UseParallel',true,'MaxObjectiveEvaluations',120);
+    T_best = results.MinObjective;
+    Lval_best = results.XAtMinObjective.l;
+    fixval_best = results.XAtMinObjective.f;
 
     rng(1);
     Y_init = 1+0.01*randn(dim*numV, numE);
     Theta_init = 1+0.01*randn(dim,numV,1);
     
-    R = 1; %varying R and L_is is basically the same thing as far as the behaviour of the algorithm goes
-    fixing_factor = 3; %this does not seem to make a big difference in some of the experiments
-    
-    %L_isval = 9.51;
-    %L_isval = 8.51;
-    L_isval = 9.51;
-        
-    
+    fixing_factor = fixval_best; %this does not seem to make a big difference in some of the experiments
+    L_isval = Lval_best;
     L_is = L_isval*ones(numE , 1);
     
-    [evol_obj, K, evol_AveX] = alg_2_Scaman_18_non_conv(Y_init, Theta_init , p,q, @ProxF, @AccGoss, @compute_objective, num_iter, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor);
+    [evol, K, ~] = alg_2_Scaman_18_non_conv(Y_init, Theta_init , p,q, @ProxF, @AccGoss, @compute_objective, num_iter,num_iter_last_hist, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor);
 
+    figure;
+    plot([1:K:num_iter*K], log(abs(evol(end) - evol)));
+    title('Alg 3');
+  
+    time_evol(alg_name+1,numV) =    T_best; 
+    
+ 
 end
 
 if (alg_name == 4) % Alg in Table 1: "Distributed Optimization Using the Primal-Dual Method of Multipliers"
@@ -136,65 +174,183 @@ if (alg_name == 6) % Consensus ADMM of the form (1/numE)* sum_e f_e(x_e) subject
     
 end
 
-if (alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
+% if (alg_name == 7) % Consensus ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
+% 
+%     rng(1);
+%     X_init = 1 + 0.01*randn(dim,2,numE);
+%     Z_init = 1 + 0.01*randn(dim,numV);
+%     U_init = 1 + 0.01*randn(dim,2,numE); 
+% 
+%     
+%     %rho = 0.96;
+%     %alp = 1.6;
+%     
+%     %rho = 0.01;
+%     %alp = 1.2;
+%     
+%     rho = 0.01;
+%     alp = 0.6;
+%     
+%     [evol_obj, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
+%     
+% end
 
+if (alg_name == 7) % Consensus over-relaxed ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
+    
+    num_iter = 5000;
+    num_iter_last_hist = 100;
+    
+    log_eps = -25;
+    verbose = 0;
+    
+    rho = optimizableVariable('r',[0.00001,0.001],'Type','real');
+    gamma = optimizableVariable('g',[0.1,2],'Type','real');
+    
+    fun = @(x) ADMM_over_relaxed_node_Z_node_non_conv_time(p,q,x.r,x.g,numV,dim,log_eps,verbose,num_iter,num_iter_last_hist, Adj_G, numE , E1,E2,D,delta, target);
+   
+    results = bayesopt(fun,[rho,gamma],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus','UseParallel',true,'MaxObjectiveEvaluations',120);
+    T_best = results.MinObjective;
+    rho_best = results.XAtMinObjective.r;
+    gamma_best = results.XAtMinObjective.g;
+   
     rng(1);
     X_init = 1 + 0.01*randn(dim,2,numE);
     Z_init = 1 + 0.01*randn(dim,numV);
     U_init = 1 + 0.01*randn(dim,2,numE); 
-
     
-    %rho = 0.96;
-    %alp = 1.6;
+    [evol, ~] = ADMM_over_relaxed_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho_best, gamma_best, numE, num_iter, num_iter_last_hist,@ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
+   
+    figure;
+    plot(log(abs(evol(end) - evol)));
+    title('Alg 7');
+  
+    %evol = log(abs(evol(end) - evol)); evol = evol(1:floor(length(evol)/2));
     
-    %rho = 0.01;
-    %alp = 1.2;
-    
-    rho = 0.01;
-    alp = 0.6;
-    
-    [evol_obj, evol_Z] = ADMM_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, alp, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
-    
-end
-
-if (alg_name == 8) % Consensus over-relaxed ADMM of the form (1/numE)* sum_( e = (i,j) \in E) f_e(x_ei,x_ej) subject to x_ei = z_i if i touches edges e in the graph G.
-
-    rng(1);
-    X_init = 1 + 0.01*randn(dim,2,numE);
-    Z_init = 1 + 0.01*randn(dim,numV);
-    U_init = 1 + 0.01*randn(dim,2,numE); 
-    
-    Walk_G = diag(sum(Adj_G).^(-1))*Adj_G;
-    w_Walk_G = (eig(full(Walk_G)));
-    w_star = max(w_Walk_G(w_Walk_G < 0.9999999));
-    w_bar = min(w_Walk_G(w_Walk_G > -0.9999999));
-    rho_star = 2*sqrt(1 - w_star^2);
+    %T_best = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+    time_evol(alg_name,numV) =    T_best; 
+    %function T = 
+ 
+%     
+%     Walk_G = diag(sum(Adj_G).^(-1))*Adj_G;
+%     w_Walk_G = (eig(full(Walk_G)));
+%     w_star = max(w_Walk_G(w_Walk_G < 0.9999999));
+%     w_bar = min(w_Walk_G(w_Walk_G > -0.9999999));
+%     rho_star = 2*sqrt(1 - w_star^2);
 
     %gamma_star = 4*inv(3 - sqrt((2-rho_star)/(2+rho_star)));
-    gamma_star = 2; % this is used when we have a ring with odd number of nodes
+%     gamma_star = 2; % this is used when we have a ring with odd number of nodes
 
-    [evol_obj, evol_Z] = ADMM_over_relaxed_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho_star, gamma_star, numE, num_iter, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
     
 end
 
- plot(ax1,evol_obj); 
- plot(ax2,log(abs(evol_obj(end) - evol_obj)));
+%  plot(ax1,evol_obj); 
+%  plot(ax2,log(abs(evol_obj(end) - evol_obj)));
 
 
 end
+end
 
-xlabel(ax1,'iteration');
-ylabel(ax1,'objective value');
-legend(ax1,'GD', 'MSDA', 'PADMM', 'ADMM (All +Cons)', 'ADMM (All -Cons)', 'ADMM (Partial +Cons)', 'ADMM (Partial +Cons + Opt)');
-legend(ax1,'Location', 'Best');
-legend(ax1,'boxoff');
 
-xlabel(ax2,'iteration');
-ylabel(ax2,'objective value');
-legend(ax2,'GD', 'MSDA', 'PADMM', 'ADMM (All +Cons)', 'ADMM (All -Cons)', 'ADMM (Partial +Cons)', 'ADMM (Partial +Cons + Opt)');
-legend(ax2,'Location', 'Best');
-legend(ax2,'boxoff');
+% xlabel(ax1,'iteration');
+% ylabel(ax1,'objective value');
+% legend(ax1,'GD', 'MSDA', 'PADMM', 'ADMM (All +Cons)', 'ADMM (All -Cons)', 'ADMM (Partial +Cons)', 'ADMM (Partial +Cons + Opt)');
+% legend(ax1,'Location', 'Best');
+% legend(ax1,'boxoff');
+% 
+% xlabel(ax2,'iteration');
+% ylabel(ax2,'objective value');
+% legend(ax2,'GD', 'MSDA', 'PADMM', 'ADMM (All +Cons)', 'ADMM (All -Cons)', 'ADMM (Partial +Cons)', 'ADMM (Partial +Cons + Opt)');
+% legend(ax2,'Location', 'Best');
+% legend(ax2,'boxoff');
         
+
+
+function T = alg_2_Scaman_18_non_conv_time(p,q,L_isval,R,fixing_factor,numV,dim,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,D,delta, target)
+    
+    rng(1);
+    Y_init = 1+0.01*randn(dim*numV, numE);
+    Theta_init = 1+0.01*randn(dim,numV,1);
+    
+    L_is = L_isval*ones(numE , 1);
+
+
+    [evol, K, ~] = alg_2_Scaman_18_non_conv(Y_init, Theta_init , p,q, @ProxF, @AccGoss, @compute_objective, num_iter, num_iter_last_hist, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor);
+    
+    evol = log(abs(evol(end) - evol)); evol = evol(1:floor(length(evol)/2));
+    
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+    
+    T = T*K;
+end    
+    
+    
+
+function T = ADMM_over_relaxed_node_Z_node_non_conv_time(p,q,rho,gamma,numV,dim,log_eps,verbose,num_iter,num_iter_last_hist, Adj_G, numE , E1,E2,D,delta, target)
+    
+    rng(1);
+    X_init = 1 + 0.01*randn(dim,2,numE);
+    Z_init = 1 + 0.01*randn(dim,numV);
+    U_init = 1 + 0.01*randn(dim,2,numE); 
+    
+    [evol, ~] = ADMM_over_relaxed_node_Z_node_non_conv(p,q,X_init, U_init, Z_init, rho, gamma, numE, num_iter, num_iter_last_hist, @ProxFPair , @compute_objective, Adj_G, D,  E1, E2, delta, target);
+    
+    evol = log(abs(evol(end) - evol)); evol = evol(1:floor(length(evol)/2));
+    
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+end
+
+
+
+function T = grad_desc_non_conv_prob_time(alf,numV,dim,log_eps,verbose,num_iter,num_iter_last_hist, Adj_G, numE , E1,E2,D,delta, target)
+    
+    rng(1);
+    X_init = 1 + 0.01*randn(dim,numV);
+    [evol, ~] = grad_desc_non_conv_prob(X_init, alf, @compute_objective,@GradF,num_iter,num_iter_last_hist, Adj_G, D, numE ,E1,E2, delta, target);
+    
+    evol = log(abs(evol(end) - evol)); evol = evol(1:floor(length(evol)/2));
+    
+    if (evol(end) < log_eps)
+        T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+        
+        if (verbose == 1)
+            hold on;
+            plot(evol);
+            plot([T,T],[max(evol),min(evol)]);
+            plot([1,num_iter],[log_eps,log_eps]);
+            hold off;
+        end
+    else
+        T = num_iter+1;
+    end
+end
+
+
+
+
 function test_PO()
 
     while (1)
@@ -280,15 +436,15 @@ end
 
 % this is the gradient with respect to variable xi of the objective
 % ((1/numE) sum_(i,j)  | |xi - xj|^2  - d_{i,j}^2 |^2) +  0.5*(delta/numV)*|X - target|^2)
-function GradF = GradF(X, i , Adj_G, D,numE, delta,target,numV)
+function GradF_out = GradF(X, i , Adj_G, D,numE, delta,target,numV)
     xi = X(:,i);
-    GradF = (delta/numV)*(xi - target);
+    GradF_out = (delta/numV)*(xi - target);
     
     Neig_i = find(Adj_G(i,:));
     for j = Neig_i
         d = D(i,j);
         xj = X(:,j);
-        GradF = GradF + (1/numE)*4*(norm(xi - xj)^2 - d^2)*(xi - xj);
+        GradF_out = GradF_out + (1/numE)*4*(norm(xi - xj)^2 - d^2)*(xi - xj);
     end
     
 end
@@ -298,19 +454,19 @@ end
 % notice that the optimization aolgorithms that we are using are minimizing
 % the average of functions (that decompose the objective). Therefore, here
 % we do not need to use the (1/numE) in the functions
-function GradFPair = GradFPair(X,e,d,numV,delta,target, E1,E2)
+function GradFPair_out = GradFPair(X,e,d,numV,delta,target, E1,E2)
 
     delta = delta/numV;
 
-    GradFPair = delta*(X - target);
+    GradFPair_out = delta*(X - target);
     
     i = E1(e); j = E2(e);
     
     xi = X(:,i);
     xj = X(:,j);
     
-    GradFPair(:,i) = GradFPair(:,i) + 4*(norm(xi - xj)^2 - d^2)*(xi - xj);
-    GradFPair(:,j) = GradFPair(:,j) + 4*(norm(xi - xj)^2 - d^2)*(xj - xi);
+    GradFPair_out(:,i) = GradFPair_out(:,i) + 4*(norm(xi - xj)^2 - d^2)*(xi - xj);
+    GradFPair_out(:,j) = GradFPair_out(:,j) + 4*(norm(xi - xj)^2 - d^2)*(xj - xi);
 end
 
 
@@ -321,7 +477,7 @@ end
 % notice again that we do not need to divide the objective by (1/numE)
 % since the optimization algorithms that use these functions already assume
 % that the objecgive is an AVERAGE of functions
-function GradConjF = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
+function GradConjF_out = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
 
     numE = 1; % we do no need to use this, but the code we wrote was initially generic, so we put numE = 1 here.
     delta = delta/numV; 
@@ -329,7 +485,7 @@ function GradConjF = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
     % the code below computes the conjugate function (1/E)( |xi - xj|^2 - d^2)^2) + 0.5*delta*|X - target|^2 
     % where the (1/E) does not multiply delta, and was wet to 1 above
     
-    GradConjF = target + (Y/delta);
+    GradConjF_out = target + (Y/delta);
 
     %return;
     
@@ -367,10 +523,10 @@ function GradConjF = GradConjF( Y , e , d , numV , delta , target , E1 , E2 )
     for normximxj = real(tmp(pos_ix))'
     
         ximxj = (-1/c)*(Y(:,i) - Y(:,j))*sign(normximxj^2 - d^2 + delta*numE/8)*normximxj;
-        GradConjF(:,i) = (ximxj + xipxj)/2;
-        GradConjF(:,j) = (-ximxj + xipxj)/2;
+        GradConjF_out(:,i) = (ximxj + xipxj)/2;
+        GradConjF_out(:,j) = (-ximxj + xipxj)/2;
         
-        if (norm(GradFPair(GradConjF,e,d,numV,delta,target,E1,E2) - Y) < 10^(-5))
+        if (norm(GradConjF_out(GradConjF_out,e,d,numV,delta,target,E1,E2) - Y) < 10^(-5))
             break;
         end
     end

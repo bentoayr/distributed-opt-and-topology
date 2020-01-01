@@ -1,4 +1,4 @@
-function [evol, K, evol_AveTheta] = alg_2_Scaman_18_non_conv(Y_init, Theta_init ,p,q, ProxF, AccGoss, compute_objective, num_iter, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor)
+function [evol, K, evol_AveTheta] = alg_2_Scaman_18_non_conv(Y_init, Theta_init ,p,q, ProxF, AccGoss, compute_objective, num_iter,num_iter_last_hist, numE , Lap_line_G, D, delta, E1,E2,target,L_is, R,     fixing_factor)
 
     dim  = size( Theta_init , 1);
     numV = size( Theta_init , 2);
@@ -32,7 +32,7 @@ function [evol, K, evol_AveTheta] = alg_2_Scaman_18_non_conv(Y_init, Theta_init 
     Theta_old = Theta;
     
     evol = nan(num_iter,1);
-    evol_AveTheta = nan(dim,numV,100);
+    evol_AveTheta = nan(dim,numV,num_iter_last_hist);
 
     
     if (norm(full(W_Acc),2)*sigma*eta_3 > 1)
@@ -94,8 +94,8 @@ function [evol, K, evol_AveTheta] = alg_2_Scaman_18_non_conv(Y_init, Theta_init 
 
         evol(t) = err;
         
-        if (num_iter - t < 100)
-           evol_AveTheta( : , : , 100 - (num_iter - t) ) = AveTheta; 
+        if (num_iter - t < num_iter_last_hist)
+           evol_AveTheta( : , : , num_iter_last_hist - (num_iter - t) ) = AveTheta; 
         end
         
         
