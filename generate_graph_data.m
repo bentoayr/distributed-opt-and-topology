@@ -1,4 +1,4 @@
-function [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line ] = generate_graph_data(numV, type)
+function [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line, Inc_line_G ] = generate_graph_data(numV, type)
     
     switch type
 
@@ -76,6 +76,7 @@ function [numV,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1
     Adj_line_G = Inc_G'*Inc_G - 2*eye(G.numedges); % the relation between the line graph and the incidence matrix is well known. see e.g. https://en.wikipedia.org/wiki/Incidence_matrix#Undirected_and_directed_graphs
 
     line_G = graph(Adj_line_G);
+    Inc_line_G =  abs(incidence(line_G));
     Lap_line_G = laplacian(line_G);
 
     E1 = G.Edges.EndNodes(:,1);

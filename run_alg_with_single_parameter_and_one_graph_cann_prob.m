@@ -12,7 +12,7 @@ delta = 0.001;
 delta = delta / dim; % we scale delta with 1/dim so that both terms in our objective have the same order of magnitude as the graph grows
 target = -0.342; 
 
-for alg_name = 0:7
+for alg_name = 8
 
 
 if (alg_name == 0) %Gradient descent
@@ -283,9 +283,76 @@ if (alg_name == 7) % Consensus ADMM of the form sum_( e = (i,j) \in E) f_e(x_ei,
     plot(err_star);
     
 end
+
+
+if (alg_name == 8) % xFilter 
+    
+    L_isval = 0.03;
+    log_eps = -7;
+    num_iter = 20000;
+    num_iter_last_hist = 100;
+    verbose = 0;
+    
+    flag = 1;
+    fix_factor_1 = 1;
+    fix_factor_2 = 1;
+    
+    var1 = optimizableVariable('r',[0.01,0.05],'Type','real');
+    var2 = optimizableVariable('g',[0.001,0.005],'Type','real');
+
+    fun = @(x) xFilter_Sun_19_cann_prob_time(flag,x.r,1,x.g,numV,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,delta, target);
+   
+    results = bayesopt(fun,[var1,var2],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus','UseParallel',true,'MaxObjectiveEvaluations',120*2);
+    T_best = results.MinObjective;
+    var1_best = results.XAtMinObjective.r;
+    var2_best = results.XAtMinObjective.g;
+
+    rng(1);
+    X_xFilter_init = 1 + 0.01*randn(numV, numE);
+
+    [evol, evol_X_aveg, K, std_xfilter] = xFilter_Sun_19_cann_prob(@GradFPair,X_xFilter_init, flag,1,var2_best, num_iter,num_iter_last_hist, numE , numV, Lap_line_G, delta, E1,E2,target,var1_best);    
+
+    figure;
+    plot([1:K:num_iter*K],evol);
+    title('Alg 8');
+    
+end
+
     
 
 end
+
+
+function T = xFilter_Sun_19_cann_prob_time(flag,L_isval,fix_factor_1,fix_factor_2,numV,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,delta, target)
+
+    rng(1);
+    X_xFilter_init = 1 + 0.01*randn(numV, numE);
+
+    try
+        [evol, ~, K, ~] = xFilter_Sun_19_cann_prob(@GradFPair,X_xFilter_init, flag,fix_factor_1,fix_factor_2, num_iter,num_iter_last_hist, numE , numV, Lap_line_G, delta, E1,E2,target,L_isval);
+
+        if (evol(end) < log_eps)
+            T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+
+            if (verbose == 1)
+                hold on;
+                plot(evol);
+                plot([T,T],[max(evol),min(evol)]);
+                plot([1,num_iter],[log_eps,log_eps]);
+                hold off;
+            end
+        else
+            T = num_iter+1;
+        end
+
+        T = T*K; % we need to count the number of gossips steps that are performed as well, because they count as communication steps
+
+    catch
+        T = num_iter+1;
+    end
+
+end
+
 
 
 
@@ -601,6 +668,12 @@ function test_GradConjF()
     
 end
 
+
+function obj = compute_log_error(X,D,p,q,E1,E2,delta,target)
+    obj = log(norm( X - target ,'fro'));
+end
+
+
 % this function computes the gradient of conjugate of the i-th function in the objective that we are trying to optimize
 % namely, the conjudate gradient of (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 )
 function [GRAD] = GradConjF(X, i, delta, E1,E2,target)
@@ -625,6 +698,33 @@ function [GRAD] = GradF(X, i,delta,E1,E2,target)
 
     GRAD = GRAD - d*target*ones(length(X),1);
 end
+
+
+% this is the gradient with respect to variable X_e of the term in the
+% objective associated with edge e.
+% this variable contains as many dimensions as the number of nodes.
+% the terms only depends on components xi and xj for the most part. Bu the
+% |X - target|^2 makes it non zero for all components
+% (0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 )
+% notice that the optimization aolgorithms that we are using are minimizing
+% the average of functions (that decompose the objective). Therefore, here
+% we do not need to use the (1/numE) in the functions
+function GradFPair_out = GradFPair(X,e,delta,target, E1,E2)
+
+    GradFPair_out = delta*(X - target);
+    
+    i = E1(e); j = E2(e);
+    
+    xi = X(i);
+    xj = X(j);
+    
+    GradFPair_out(i) = GradFPair_out(i) + (xi - xj);
+    GradFPair_out(j) = GradFPair_out(j) + (xj - xi);
+end
+
+
+
+
 
 % this is the proximal operator 
 % Prox(N) = argmin_X    (1/numE)*(0.5 * (x_i - x_j)^2 + 0.5*delta*(X - target)^2 ) + 0.5*rho* (X - N)^2

@@ -6,14 +6,14 @@
 
 %time_evol = sparse(1);
 
-try
-    delete(gcp('nocreate'));
-catch
-end
-parpool(20);
+% try
+%     delete(gcp('nocreate'));
+% catch
+% end
+% parpool(20);
 
-for numV = [80]%60%[60:20:160]
-graph_type = 3;
+for numV = 80%[80]%60%[60:20:160]
+graph_type = 7;
 
 [num,  numE, numEline, Adj_G,Lap_G, Adj_line_G, Lap_line_G, E1, E2, E1line, E2line ] = generate_graph_data(numV, graph_type);
 
@@ -42,7 +42,7 @@ q = 2;
 % box on;
 
 
-for alg_name = [3]
+for alg_name = [8]
 
 
 if (alg_name == 0)
@@ -247,6 +247,58 @@ end
 %  plot(ax2,log(abs(evol_obj(end) - evol_obj)));
 
 
+if (alg_name == 8) % running the algorithm xFilter from Sun et al 2019
+    
+    L_isval = 1;
+    log_eps = -5;
+    num_iter = 4000;
+    num_iter_last_hist = 100;
+    verbose = 1;
+    
+    flag = 1;
+    fix_factor_1 = 1;
+    fix_factor_2 = 10;
+    
+    %T = xFilter_Sun_19_non_conv_conv_time(flag,L_isval,fix_factor_1,fix_factor_2,dim,numV,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,D,delta, target);
+    
+    %var1 = optimizableVariable('r',[0.0025,0.05],'Type','real');
+    %var2 = optimizableVariable('g',[0.025,0.5],'Type','real');
+    
+    %var1 = optimizableVariable('r',[0.025,0.5],'Type','real');
+    %var2 = optimizableVariable('g',[0.1,2],'Type','real');
+    
+    var1 = optimizableVariable('r',[0.1,2],'Type','real');
+    var2 = optimizableVariable('g',[0.001,0.05],'Type','real');
+
+    fun = @(x) xFilter_Sun_19_non_conv_conv_time(flag,L_isval,x.r,x.g,dim,numV,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,D,delta, target);
+   
+    results = bayesopt(fun,[var1,var2],'Verbose',0,'AcquisitionFunctionName','expected-improvement-plus','UseParallel',true,'MaxObjectiveEvaluations',120);
+    T_best = results.MinObjective;
+    var1_best = results.XAtMinObjective.r;
+    var2_best = results.XAtMinObjective.g;
+    
+    
+    rng(1);
+    X_xFilter_init = 1 + 0.01*randn(dim*numV, numE);
+    num_iter = 2*num_iter;
+
+    [evol, evol_X_aveg, K, std_xfilter] = xFilter_Sun_19_non_conv(@GradFPair,@compute_objective,X_xFilter_init, flag,var1_best,var2_best,dim, num_iter,num_iter_last_hist, numE , numV, Lap_line_G, D, delta, E1,E2,target,L_isval);    
+    
+    figure;
+    plot([1:K:num_iter*K], log(abs(evol(end) - evol)));
+    title('Alg 8');
+  
+    figure;
+    plot([1:K:num_iter*K],  evol);
+    title('Alg 8');
+    
+    %evol = log(abs(evol(end) - evol)); evol = evol(1:floor(length(evol)/2));
+    
+    %T_best = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+    time_evol(alg_name,numV) =    T_best; 
+    
+end
+
 end
 end
 
@@ -263,6 +315,40 @@ end
 % legend(ax2,'Location', 'Best');
 % legend(ax2,'boxoff');
         
+
+
+function T = xFilter_Sun_19_non_conv_conv_time(flag,L_isval,fix_factor_1,fix_factor_2,dim,numV,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,D,delta, target)
+
+    rng(1);
+    X_xFilter_init = 1 + 0.01*randn(dim*numV, numE);
+
+    try
+        [evol, evol_X_aveg, K, std_xfilter] = xFilter_Sun_19_non_conv(@GradFPair,@compute_objective,X_xFilter_init, flag,fix_factor_1,fix_factor_2,dim, num_iter,num_iter_last_hist, numE , numV, Lap_line_G, D, delta, E1,E2,target,L_isval);    
+
+        evol = log(abs(evol(end) - evol)); evol = evol(1:floor(length(evol)/2));
+
+        if (evol(end) < log_eps)
+            T = find(diff(sign(evol - log_eps)) < 0, 1, 'last' );
+
+            if (verbose == 1)
+                hold on;
+                plot(evol);
+                plot([T,T],[max(evol),min(evol)]);
+                plot([1,num_iter],[log_eps,log_eps]);
+                hold off;
+            end
+        else
+            T = num_iter+1;
+        end
+
+        T = T*K;
+    catch
+        T = num_iter+1;
+    end
+    
+end
+
+
 
 
 function T = alg_2_Scaman_18_non_conv_time(p,q,L_isval,R,fixing_factor,numV,dim,log_eps,verbose,num_iter,num_iter_last_hist, Lap_line_G, numE , E1,E2,D,delta, target)
@@ -449,11 +535,16 @@ function GradF_out = GradF(X, i , Adj_G, D,numE, delta,target,numV)
     
 end
 
-% this is the gradient with respect to variable xi of the objective
+% this is the gradient with respect to variable X_e of the term in the
+% objective associated with edge e.
+% this variable contains as many dimensions as the number of nodes.
+% the terms only depends on components xi and xj for the most part. Bu the
+% |X - target|^2 makes it non zero for all components
 % (| |xi - xj|^p  - d^p |^q + 0.5*(delta/numV)*|X - target|^2)
 % notice that the optimization aolgorithms that we are using are minimizing
 % the average of functions (that decompose the objective). Therefore, here
 % we do not need to use the (1/numE) in the functions
+% this function is for p = q = 2
 function GradFPair_out = GradFPair(X,e,d,numV,delta,target, E1,E2)
 
     delta = delta/numV;
